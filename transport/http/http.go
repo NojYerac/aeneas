@@ -5,9 +5,9 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/nojyerac/aeneas/data"
 	"github.com/nojyerac/go-lib/tracing"
 	libhttp "github.com/nojyerac/go-lib/transport/http"
-	"github.com/nojyerac/aeneas/data"
 	"go.opentelemetry.io/otel/trace"
 )
 
