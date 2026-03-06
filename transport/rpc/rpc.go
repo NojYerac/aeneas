@@ -3,9 +3,9 @@ package rpc
 import (
 	"context"
 
-	"github.com/nojyerac/go-lib/tracing"
 	"github.com/nojyerac/aeneas/data"
 	pb "github.com/nojyerac/aeneas/pb/example"
+	"github.com/nojyerac/go-lib/tracing"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"

@@ -3,10 +3,10 @@ package db
 import (
 	"context"
 
+	"github.com/nojyerac/aeneas/data"
 	"github.com/nojyerac/go-lib/db"
 	"github.com/nojyerac/go-lib/log"
 	"github.com/nojyerac/go-lib/tracing"
-	"github.com/nojyerac/aeneas/data"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 )

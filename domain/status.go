@@ -19,7 +19,7 @@ const (
 	ExecutionRunning   ExecutionStatus = "running"
 	ExecutionSucceeded ExecutionStatus = "succeeded"
 	ExecutionFailed    ExecutionStatus = "failed"
-	ExecutionCancelled ExecutionStatus = "cancelled"
+	ExecutionCancelled ExecutionStatus = "canceled"
 )
 
 // StepExecutionStatus represents the lifecycle state of a step execution

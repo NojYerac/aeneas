@@ -7,6 +7,10 @@ import (
 	"os/signal"
 	"sync"
 
+	"github.com/nojyerac/aeneas/config"
+	"github.com/nojyerac/aeneas/data/db"
+	"github.com/nojyerac/aeneas/transport/http"
+	"github.com/nojyerac/aeneas/transport/rpc"
 	libdb "github.com/nojyerac/go-lib/db"
 	"github.com/nojyerac/go-lib/health"
 	"github.com/nojyerac/go-lib/log"
@@ -16,10 +20,6 @@ import (
 	libgrpc "github.com/nojyerac/go-lib/transport/grpc"
 	libhttp "github.com/nojyerac/go-lib/transport/http"
 	"github.com/nojyerac/go-lib/version"
-	"github.com/nojyerac/aeneas/config"
-	"github.com/nojyerac/aeneas/data/db"
-	"github.com/nojyerac/aeneas/transport/http"
-	"github.com/nojyerac/aeneas/transport/rpc"
 )
 
 func main() { //nolint:unused // main is the entry point for the service.
