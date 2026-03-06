@@ -54,7 +54,7 @@ var _ = Describe("Status State Machine", func() {
 			})
 
 			It("allows pending -> canceled", func() {
-				err := domain.TransitionExecution(domain.ExecutionPending, domain.ExecutionCancelled)
+				err := domain.TransitionExecution(domain.ExecutionPending, domain.ExecutionCanceled)
 				Expect(err).ToNot(HaveOccurred())
 			})
 
@@ -69,7 +69,7 @@ var _ = Describe("Status State Machine", func() {
 			})
 
 			It("allows running -> canceled", func() {
-				err := domain.TransitionExecution(domain.ExecutionRunning, domain.ExecutionCancelled)
+				err := domain.TransitionExecution(domain.ExecutionRunning, domain.ExecutionCanceled)
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
@@ -97,7 +97,7 @@ var _ = Describe("Status State Machine", func() {
 			})
 
 			It("rejects canceled -> running", func() {
-				err := domain.TransitionExecution(domain.ExecutionCancelled, domain.ExecutionRunning)
+				err := domain.TransitionExecution(domain.ExecutionCanceled, domain.ExecutionRunning)
 				Expect(err).To(HaveOccurred())
 			})
 		})

@@ -19,7 +19,7 @@ const (
 	ExecutionRunning   ExecutionStatus = "running"
 	ExecutionSucceeded ExecutionStatus = "succeeded"
 	ExecutionFailed    ExecutionStatus = "failed"
-	ExecutionCancelled ExecutionStatus = "canceled"
+	ExecutionCanceled  ExecutionStatus = "canceled"
 )
 
 // StepExecutionStatus represents the lifecycle state of a step execution
@@ -42,11 +42,11 @@ var workflowTransitions = map[WorkflowStatus][]WorkflowStatus{
 
 // Valid execution status transitions
 var executionTransitions = map[ExecutionStatus][]ExecutionStatus{
-	ExecutionPending:   {ExecutionRunning, ExecutionCancelled},
-	ExecutionRunning:   {ExecutionSucceeded, ExecutionFailed, ExecutionCancelled},
+	ExecutionPending:   {ExecutionRunning, ExecutionCanceled},
+	ExecutionRunning:   {ExecutionSucceeded, ExecutionFailed, ExecutionCanceled},
 	ExecutionSucceeded: {}, // terminal state
 	ExecutionFailed:    {}, // terminal state
-	ExecutionCancelled: {}, // terminal state
+	ExecutionCanceled:  {}, // terminal state
 }
 
 // Valid step execution status transitions
