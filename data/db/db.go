@@ -1,17 +1,12 @@
 package db
 
 import (
-	"context"
-
-	"github.com/nojyerac/aeneas/data"
 	"github.com/nojyerac/go-lib/db"
 	"github.com/nojyerac/go-lib/log"
 	"github.com/nojyerac/go-lib/tracing"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
 )
-
-var _ data.DataSource = (*source)(nil)
 
 type options struct {
 	t trace.Tracer
@@ -32,33 +27,16 @@ func WithLogger(l logrus.FieldLogger) Option {
 	}
 }
 
-func NewDataSource(database db.Database, o ...Option) data.DataSource {
-	opts := &options{
+func defaultOptions() *options {
+	return &options{
 		t: tracing.TracerForPackage(),
 		l: log.Nop(),
 	}
-
-	for _, opt := range o {
-		opt(opts)
-	}
-
-	return &source{
-		t: opts.t,
-		l: opts.l,
-		d: database,
-	}
 }
 
-type source struct {
+// Repositories will be implemented here using the domain.Repository interfaces
+type repositories struct {
 	t trace.Tracer
 	l logrus.FieldLogger
 	d db.Database
-}
-
-func (s *source) GetExample(ctx context.Context, id string) (*data.Example, error) {
-	ctx, span := s.t.Start(ctx, "source.GetExample")
-	defer span.End()
-	ex := new(data.Example)
-	err := s.d.Get(ctx, ex, "SELECT id, name, description FROM example WHERE id = $1", id)
-	return ex, err
 }

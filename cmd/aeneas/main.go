@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/nojyerac/aeneas/config"
-	"github.com/nojyerac/aeneas/data/db"
 	"github.com/nojyerac/aeneas/transport/http"
 	"github.com/nojyerac/aeneas/transport/rpc"
 	libdb "github.com/nojyerac/go-lib/db"
@@ -43,16 +42,14 @@ func main() { //nolint:unused // main is the entry point for the service.
 	metrics.SetGlobal(mp)
 	hc := health.NewChecker(config.HealthConfig)
 
-	// sources
+	// database
 	database := libdb.NewDatabase(
 		config.DBConfig,
 		libdb.WithHealthChecker(hc),
 		libdb.WithLogger(logger),
 	)
-	dataSrc := db.NewDataSource(
-		database,
-		db.WithLogger(logger),
-	)
+
+	// TODO: Initialize repository implementations here
 
 	// transports
 	hSrv := libhttp.NewServer(
@@ -60,9 +57,9 @@ func main() { //nolint:unused // main is the entry point for the service.
 		libhttp.WithMetricsHandler(metricHandler),
 		libhttp.WithHealthChecker(hc),
 	)
-	http.RegisterRoutes(dataSrc, hSrv)
+	http.RegisterRoutes(hSrv)
 
-	reg := rpc.RegisterServices(dataSrc, rpc.WithLogger(logger))
+	reg := rpc.RegisterServices(rpc.WithLogger(logger))
 	gSrv := libgrpc.NewServer(reg)
 
 	srv, err := transport.NewServer(
