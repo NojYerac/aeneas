@@ -33,6 +33,7 @@ func WithLogger(l logrus.FieldLogger) Option {
 	}
 }
 
+//nolint:unused // Reserved for upcoming service registration
 func defaultOptions() *options {
 	return &options{
 		t: tracing.TracerForPackage(),

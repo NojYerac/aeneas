@@ -27,6 +27,7 @@ func WithLogger(l logrus.FieldLogger) Option {
 	}
 }
 
+//nolint:unused // Reserved for upcoming repository constructor
 func defaultOptions() *options {
 	return &options{
 		t: tracing.TracerForPackage(),
@@ -35,6 +36,8 @@ func defaultOptions() *options {
 }
 
 // Repositories will be implemented here using the domain.Repository interfaces
+//
+//nolint:unused // Reserved for upcoming repository implementations
 type repositories struct {
 	t trace.Tracer
 	l logrus.FieldLogger
