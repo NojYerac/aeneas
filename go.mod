@@ -4,6 +4,7 @@ go 1.25.1
 
 require (
 	github.com/go-playground/validator/v10 v10.30.1
+	github.com/google/uuid v1.6.0
 	github.com/nojyerac/go-lib v0.0.0-20260306051246-ff5f830b2fd7
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
@@ -31,7 +32,6 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect

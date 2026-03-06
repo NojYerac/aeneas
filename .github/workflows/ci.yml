@@ -17,17 +17,19 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25.1"
+          go-version: "1.24.1"
           cache: true
 
-      - name: Download modules
-        run: go mod download
+      - name: Install ginkgo CLI
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@latest
+        # Ensure $GOBIN is in $PATH for the next steps
+        # This is handled automatically by actions/setup-go in recent versions
 
-      - name: Vet
-        run: go vet ./...
+      - name: Download Go modules
+        run: go mod tidy
 
-      - name: Test
-        run: bash scripts/test.sh
+      - name: Run Ginkgo tests
+        run: ginkgo -r --randomize-all --randomize-suites --race --trace -cover
 
   lint:
     name: lint
@@ -41,7 +43,7 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
 

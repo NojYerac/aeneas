@@ -56,7 +56,7 @@ docker run --rm -p 8080:8080 aeneas:dev
 ```text
 .github/workflows/ — CI pipeline
 api/               — protobuf & OpenAPI definitions
-cmd/aeneas/     — main package / entry-point
+cmd/aeneas/        — main package / entry-point
 config/            — root Config struct + defaults
 data/              — business logic + data access (repositories, etc.)
 mocks/             — generated test mocks (via mockery)
@@ -74,6 +74,7 @@ Edit `transport/server.go` and call `s.HandleFunc` or `s.Handle` with your
 handler.  The API prefix `/api` is applied automatically by go-lib.
 
 ## Adding gRPC services
+
 Add your protobuf definitions to the `api/` directory and generate code with `protoc`.
 Then, edit `transport/rpc/server.go` and call `s.RegisterService` with your service
 implementation.
