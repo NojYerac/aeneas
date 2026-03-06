@@ -1,0 +1,106 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - depguard
+    - dogsled
+    - dupl
+    - errcheck
+    - funlen
+    - ginkgolinter
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        main:
+          list-mode: lax
+          files:
+            - $all
+            - '!$test'
+          allow:
+            - $gostd
+            - github.com/DATA-DOG/go-sqlmock
+            - github.com/dgrijalva/jwt-go
+            - github.com/gin-gonic/gin
+            - github.com/go-openapi/errors
+            - github.com/go-playground/validator/v10
+            - github.com/go-redis/redis
+            - github.com/grpc-ecosystem/go-grpc-middleware/
+            - github.com/grpc-ecosystem/go-grpc-prometheus
+            - github.com/jmoiron/sqlx
+            - github.com/mitchellh/mapstructure
+            - github.com/sirupsen/logrus
+            - github.com/soheilhy/cmux
+            - github.com/spf13/pflag
+            - github.com/spf13/viper
+            - github.com/nojyerac/go-lib
+          deny:
+            - pkg: github.com/rs/zerolog
+              desc: "Use logrus instead of zerolog for logging"
+    dupl:
+      threshold: 100
+    funlen:
+      lines: 100
+      statements: 50
+    goconst:
+      min-len: 2
+      min-occurrences: 2
+    gocritic:
+      disabled-checks:
+        - wrapperFunc
+        - dupImport
+        - octalLiteral
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    gocyclo:
+      min-complexity: 15
+    lll:
+      line-length: 120
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: dot-imports
+          disabled: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

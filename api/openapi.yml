@@ -1,0 +1,116 @@
+openapi: 3.1.0
+info:
+  title:  Aeneas API
+  description: |
+    This is the API documentation for  Aeneas, a go-lib
+    created service.
+  version: 0.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /livez:
+    get:
+      summary: Liveliness probe endpoint.
+      description: |
+        This endpoint can be used as a liveliness probe to check if the service is running.
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "OK"
+  /readyz:
+    get:
+      summary: Readiness probe endpoint.
+      description: |
+        This endpoint can be used as a readiness probe to check if the service is ready to receive traffic.
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: >-
+                  [ping_check] OK
+                  [db_check] OK
+  /metrics:
+    get:
+      summary: Prometheus metrics endpoint.
+      description: |
+        This endpoint exposes Prometheus metrics for monitoring the service.
+      responses:
+        "200":
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP  http_request_duration_seconds Request duration in seconds
+                  # TYPE  http_request_duration_seconds histogram
+                   http_request_duration_seconds_bucket{le="0.1"} 10
+                   http_request_duration_seconds_bucket{le="0.5"} 50
+                  ... more metrics ...
+  /version:
+    get:
+      summary: Service version endpoint.
+      description: |
+        This endpoint returns the current version of the service.
+      responses:
+        "200":
+          description: Service version
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - name
+                  - semVer
+                  - goVer
+                  - os
+                properties:
+                  name:
+                    type: string
+                  semVer:
+                    type: string
+                  gitSHA:
+                    type: string
+                  goVer:
+                    type: string
+                  os:
+                    type: string
+  /example/{id}:
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    get:
+      summary: Example endpoint.
+      description: |
+        This is an example endpoint to demonstrate how to add custom API routes to the created service.
+      responses:
+        "200":
+          description: Example response
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - id
+                - name
+                - description
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  description:
+                    type: string

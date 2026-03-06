@@ -1,0 +1,8 @@
+packages:
+  github.com/nojyerac/aeneas/data:
+    config:
+      dir: ./mocks/data
+      with-expecter: True
+      resolve-type-alias: False
+      issue-845-fix: True
+      include-regex: "^(DataSource)$"
