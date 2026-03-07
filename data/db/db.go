@@ -1,7 +1,6 @@
 package db
 
 import (
-	"github.com/nojyerac/go-lib/db"
 	"github.com/nojyerac/go-lib/log"
 	"github.com/nojyerac/go-lib/tracing"
 	"github.com/sirupsen/logrus"
@@ -27,19 +26,9 @@ func WithLogger(l logrus.FieldLogger) Option {
 	}
 }
 
-//nolint:unused // Reserved for upcoming repository constructor
 func defaultOptions() *options {
 	return &options{
 		t: tracing.TracerForPackage(),
 		l: log.Nop(),
 	}
-}
-
-// Repositories will be implemented here using the domain.Repository interfaces
-//
-//nolint:unused // Reserved for upcoming repository implementations
-type repositories struct {
-	t trace.Tracer
-	l logrus.FieldLogger
-	d db.Database
 }
