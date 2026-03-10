@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	migrationsPath = "/home/node/.openclaw/workspace/vulcan/aeneas/migrations"
+	migrationsPath = "../../migrations"
 	upSQLSuffix    = ".up.sql"
 )
 
