@@ -307,48 +307,37 @@ func TestExecutionService_ListByWorkflow(t *testing.T) {
 	})
 }
 
+func testSuccessfulCancel(t *testing.T, ctx context.Context, executionID string, status domain.ExecutionStatus) {
+	t.Helper()
+	workflowRepo := new(MockWorkflowRepository)
+	executionRepo := new(MockExecutionRepository)
+	stepExecutionRepo := new(MockStepExecutionRepository)
+	svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
+
+	execution := &domain.Execution{
+		ID:     uuid.MustParse(executionID),
+		Status: status,
+	}
+
+	executionRepo.On("Get", ctx, executionID).Return(execution, nil)
+	executionRepo.On("UpdateStatus", ctx, executionID, domain.ExecutionCanceled).Return(nil)
+
+	err := svc.Cancel(ctx, executionID)
+
+	assert.NoError(t, err)
+	executionRepo.AssertExpectations(t)
+}
+
 func TestExecutionService_Cancel(t *testing.T) {
 	ctx := context.Background()
 	executionID := uuid.New().String()
 
 	t.Run("successful cancel from pending", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		execution := &domain.Execution{
-			ID:     uuid.MustParse(executionID),
-			Status: domain.ExecutionPending,
-		}
-
-		executionRepo.On("Get", ctx, executionID).Return(execution, nil)
-		executionRepo.On("UpdateStatus", ctx, executionID, domain.ExecutionCanceled).Return(nil)
-
-		err := svc.Cancel(ctx, executionID)
-
-		assert.NoError(t, err)
-		executionRepo.AssertExpectations(t)
+		testSuccessfulCancel(t, ctx, executionID, domain.ExecutionPending)
 	})
 
 	t.Run("successful cancel from running", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		execution := &domain.Execution{
-			ID:     uuid.MustParse(executionID),
-			Status: domain.ExecutionRunning,
-		}
-
-		executionRepo.On("Get", ctx, executionID).Return(execution, nil)
-		executionRepo.On("UpdateStatus", ctx, executionID, domain.ExecutionCanceled).Return(nil)
-
-		err := svc.Cancel(ctx, executionID)
-
-		assert.NoError(t, err)
-		executionRepo.AssertExpectations(t)
+		testSuccessfulCancel(t, ctx, executionID, domain.ExecutionRunning)
 	})
 
 	t.Run("invalid execution ID format", func(t *testing.T) {
