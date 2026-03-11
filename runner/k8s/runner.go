@@ -106,7 +106,7 @@ func (r *K8sRunner) Execute(ctx context.Context, step domain.StepDefinition) (*r
 	}
 
 	// Create the Job
-	job, err := r.createJob(ctx, step)
+	job, err := r.createJob(ctx, &step)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create job: %w", err)
 	}
@@ -150,7 +150,7 @@ func (r *K8sRunner) Execute(ctx context.Context, step domain.StepDefinition) (*r
 }
 
 // createJob creates a Kubernetes Job from a StepDefinition
-func (r *K8sRunner) createJob(ctx context.Context, step domain.StepDefinition) (*batchv1.Job, error) {
+func (r *K8sRunner) createJob(ctx context.Context, step *domain.StepDefinition) (*batchv1.Job, error) {
 	jobName := r.generateJobName(step.Name)
 
 	// Build environment variables
@@ -253,7 +253,7 @@ func (r *K8sRunner) getPodForJob(ctx context.Context, jobName string) (*corev1.P
 // capturePodLogs retrieves logs from a pod
 func (r *K8sRunner) capturePodLogs(ctx context.Context, podName string) (string, error) {
 	req := r.clientset.CoreV1().Pods(r.namespace).GetLogs(podName, &corev1.PodLogOptions{})
-	
+
 	stream, err := req.Stream(ctx)
 	if err != nil {
 		return "", fmt.Errorf("failed to stream logs: %w", err)
@@ -276,7 +276,7 @@ func (r *K8sRunner) getExitCode(pod *corev1.Pod) int {
 	}
 
 	containerStatus := pod.Status.ContainerStatuses[0]
-	
+
 	if containerStatus.State.Terminated != nil {
 		return int(containerStatus.State.Terminated.ExitCode)
 	}
@@ -325,7 +325,7 @@ func sanitizeLabel(value string) string {
 	if len(value) > 63 {
 		value = value[:63]
 	}
-	
+
 	// Replace invalid characters with hyphens
 	value = strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
@@ -333,10 +333,10 @@ func sanitizeLabel(value string) string {
 		}
 		return '-'
 	}, value)
-	
+
 	// Trim leading/trailing non-alphanumeric
 	value = strings.Trim(value, "-_.")
-	
+
 	return value
 }
 
@@ -358,7 +358,12 @@ type TestableK8sRunner struct {
 }
 
 // NewTestableK8sRunner creates a runner with an injected fake clientset for testing
-func NewTestableK8sRunner(clientset kubernetes.Interface, namespace string, logger *logrus.Logger, cleanup bool) *TestableK8sRunner {
+func NewTestableK8sRunner(
+	clientset kubernetes.Interface,
+	namespace string,
+	logger *logrus.Logger,
+	cleanup bool,
+) *TestableK8sRunner {
 	if logger == nil {
 		logger = logrus.New()
 	}

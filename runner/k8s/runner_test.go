@@ -38,6 +38,7 @@ var _ = Describe("K8sRunner", func() {
 		Context("with successful job execution", func() {
 			It("should create job, wait for completion, and return exit code 0", func() {
 				// Create fake clientset
+				//nolint:staticcheck // NewSimpleClientset deprecated but OK for unit tests
 				fakeClient := fake.NewSimpleClientset()
 
 				// Set up watch reactors
@@ -127,6 +128,7 @@ var _ = Describe("K8sRunner", func() {
 		Context("with failed job execution", func() {
 			It("should return non-zero exit code", func() {
 				// Create fake clientset
+				//nolint:staticcheck // NewSimpleClientset deprecated but OK for unit tests
 				fakeClient := fake.NewSimpleClientset()
 
 				// Set up watch reactors
@@ -208,6 +210,7 @@ var _ = Describe("K8sRunner", func() {
 		Context("with timeout", func() {
 			It("should respect context timeout", func() {
 				// Create fake clientset
+				//nolint:staticcheck // NewSimpleClientset deprecated but OK for unit tests
 				fakeClient := fake.NewSimpleClientset()
 
 				// Set up watch reactors
@@ -237,6 +240,7 @@ var _ = Describe("K8sRunner", func() {
 
 		Context("job name generation", func() {
 			It("should generate valid kubernetes job names", func() {
+				//nolint:staticcheck // NewSimpleClientset deprecated but OK for unit tests
 				fakeClient := fake.NewSimpleClientset()
 				jobWatcher := watch.NewFake()
 				fakeClient.PrependWatchReactor("jobs", k8stesting.DefaultWatchReactor(jobWatcher, nil))
@@ -272,7 +276,7 @@ var _ = Describe("K8sRunner", func() {
 					// Check job was created with valid name
 					jobs, err := fakeClient.BatchV1().Jobs("aeneas").List(ctx, metav1.ListOptions{})
 					Expect(err).NotTo(HaveOccurred())
-					
+
 					if len(jobs.Items) > 0 {
 						lastJob := jobs.Items[len(jobs.Items)-1]
 						Expect(len(lastJob.Name)).To(BeNumerically("<=", 63))
@@ -287,6 +291,7 @@ var _ = Describe("K8sRunner", func() {
 
 		Context("job configuration", func() {
 			It("should set ActiveDeadlineSeconds when timeout is specified", func() {
+				//nolint:staticcheck // NewSimpleClientset deprecated but OK for unit tests
 				fakeClient := fake.NewSimpleClientset()
 				jobWatcher := watch.NewFake()
 				fakeClient.PrependWatchReactor("jobs", k8stesting.DefaultWatchReactor(jobWatcher, nil))
@@ -316,6 +321,7 @@ var _ = Describe("K8sRunner", func() {
 			})
 
 			It("should set environment variables", func() {
+				//nolint:staticcheck // NewSimpleClientset deprecated but OK for unit tests
 				fakeClient := fake.NewSimpleClientset()
 				jobWatcher := watch.NewFake()
 				fakeClient.PrependWatchReactor("jobs", k8stesting.DefaultWatchReactor(jobWatcher, nil))
@@ -344,13 +350,13 @@ var _ = Describe("K8sRunner", func() {
 
 				job := jobs.Items[0]
 				envVars := job.Spec.Template.Spec.Containers[0].Env
-				
+
 				// Check that env vars are present
 				envMap := make(map[string]string)
 				for _, ev := range envVars {
 					envMap[ev.Name] = ev.Value
 				}
-				
+
 				Expect(envMap).To(HaveKey("VAR1"))
 				Expect(envMap).To(HaveKey("VAR2"))
 				Expect(envMap["VAR1"]).To(Equal("value1"))
