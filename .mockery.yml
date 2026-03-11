@@ -6,3 +6,10 @@ packages:
       resolve-type-alias: False
       issue-845-fix: True
       include-regex: "^(DataSource)$"
+  github.com/nojyerac/aeneas/runner:
+    config:
+      dir: ./mocks/runner
+      with-expecter: True
+      resolve-type-alias: False
+      issue-845-fix: True
+      include-regex: "^(Runner)$"

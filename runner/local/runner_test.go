@@ -1,5 +1,4 @@
 //go:build integration
-// +build integration
 
 package local_test
 
@@ -18,7 +17,7 @@ import (
 
 func TestLocalRunner(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "LocalRunner Suite")
+	RunSpecs(t, "Local Runner Suite")
 }
 
 var _ = Describe("LocalRunner", func() {
