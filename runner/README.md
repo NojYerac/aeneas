@@ -48,10 +48,21 @@ result, err := runner.Execute(ctx, buildStep)
 
 Docker-based implementation that executes steps in containers:
 
-- **Purpose**: Production execution of workflow steps
+- **Purpose**: Production execution of workflow steps on local machines
 - **Requirements**:
   - Docker daemon running and accessible
   - Docker SDK for Go (`github.com/docker/docker`)
+  - Go 1.25+ (due to project requirements)
+
+### K8sRunner (`runner/k8s/`)
+
+Kubernetes-based implementation that executes steps as Kubernetes Jobs:
+
+- **Purpose**: Production execution of workflow steps in Kubernetes clusters
+- **Requirements**:
+  - Access to a Kubernetes cluster (in-cluster or via kubeconfig)
+  - Kubernetes client-go libraries
+  - Proper RBAC permissions to create/manage Jobs and Pods
   - Go 1.25+ (due to project requirements)
 
 #### Features
@@ -82,6 +93,44 @@ step := domain.StepDefinition{
 
 result, err := runner.Execute(ctx, step)
 ```
+
+#### K8sRunner Features
+
+- Kubernetes Job creation from StepDefinitions
+- DNS-compliant job naming (max 63 chars)
+- Environment variable passing
+- Timeout support via ActiveDeadlineSeconds
+- Automatic Job cleanup via TTLSecondsAfterFinished
+- Pod log capture
+- Container exit code retrieval
+- Support for both in-cluster and out-of-cluster configurations
+- Configurable namespace (default: "aeneas")
+
+#### K8sRunner Example
+
+```go
+runner, err := k8s.NewK8sRunner(k8s.Config{
+    Namespace:               "aeneas",
+    Kubeconfig:              "",     // empty = in-cluster config
+    CleanupRetentionSeconds: 300,
+}, logger)
+if err != nil {
+    log.Fatal(err)
+}
+
+step := domain.StepDefinition{
+    Name:           "build",
+    Image:          "golang:1.25",
+    Command:        []string{"go"},
+    Args:           []string{"build", "./..."},
+    Env:            map[string]string{"CGO_ENABLED": "0"},
+    TimeoutSeconds: 300,
+}
+
+result, err := runner.Execute(ctx, step)
+```
+
+See [runner/k8s/README.md](k8s/README.md) for detailed usage and integration testing instructions.
 
 ## Testing
 
@@ -119,12 +168,33 @@ Integration tests verify:
 - Image pulling
 - Log capture
 
+### Unit Tests (K8sRunner)
+
+```bash
+ginkgo -v runner/k8s/
+```
+
+The K8sRunner unit tests use fake Kubernetes clientsets and verify:
+- Configuration handling (namespace, kubeconfig, cleanup retention)
+- Job name generation and DNS compliance
+- Job specification structure
+
+**Note**: Full integration tests for K8sRunner require a live Kubernetes cluster. See [runner/k8s/README.md](k8s/README.md) for manual integration test procedures using minikube or kind.
+
 ## Dependencies
 
-- `github.com/docker/docker` (v27.5.1+): Docker SDK for container operations
+### Common
 - `github.com/sirupsen/logrus`: Logging
 - `github.com/onsi/ginkgo/v2`: Test framework
 - `github.com/onsi/gomega`: Test matchers
+
+### LocalRunner
+- `github.com/docker/docker` (v27.5.1+): Docker SDK for container operations
+
+### K8sRunner
+- `k8s.io/client-go` (v0.32.3+): Kubernetes client library
+- `k8s.io/api` (v0.32.3+): Kubernetes API types
+- `k8s.io/apimachinery` (v0.32.3+): Kubernetes API machinery
 
 ## Known Issues / Notes
 
