@@ -261,71 +261,47 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 	})
 
-	Describe("POST /api/v1/workflows/{id}/activate", func() {
-		var workflowID string
+	// Helper function to test workflow state transitions
+	testWorkflowStateTransition := func(endpoint, initialStatus, expectedStatus, testDescription string) func() {
+		return func() {
+			var workflowID string
 
-		BeforeEach(func() {
-			wf := &domain.Workflow{
-				ID:          uuid.New(),
-				Name:        "Test Workflow",
-				Description: "Test",
-				Status:      domain.WorkflowDraft,
-				Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-			workflowID = wf.ID.String()
-		})
+			BeforeEach(func() {
+				wf := &domain.Workflow{
+					ID:          uuid.New(),
+					Name:        "Test Workflow",
+					Description: "Test",
+					Status:      domain.WorkflowStatus(initialStatus),
+					Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}
+				_ = workflowRepo.Create(context.Background(), wf)
+				workflowID = wf.ID.String()
+			})
 
-		It("activates a draft workflow", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/activate", http.NoBody)
-			w := httptest.NewRecorder()
+			It(testDescription, func() {
+				req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/"+endpoint, http.NoBody)
+				w := httptest.NewRecorder()
 
-			server.ServeHTTP(w, req)
+				server.ServeHTTP(w, req)
 
-			Expect(w.Code).To(Equal(http.StatusOK))
+				Expect(w.Code).To(Equal(http.StatusOK))
 
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
 
-			Expect(resp["status"]).To(Equal("active"))
-		})
-	})
+				Expect(resp["status"]).To(Equal(expectedStatus))
+			})
+		}
+	}
 
-	Describe("POST /api/v1/workflows/{id}/archive", func() {
-		var workflowID string
+	Describe("POST /api/v1/workflows/{id}/activate",
+		testWorkflowStateTransition("activate", "draft", "active", "activates a draft workflow"))
 
-		BeforeEach(func() {
-			wf := &domain.Workflow{
-				ID:          uuid.New(),
-				Name:        "Test Workflow",
-				Description: "Test",
-				Status:      domain.WorkflowActive,
-				Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-			workflowID = wf.ID.String()
-		})
-
-		It("archives an active workflow", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/archive", http.NoBody)
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
-			Expect(w.Code).To(Equal(http.StatusOK))
-
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["status"]).To(Equal("archived"))
-		})
-	})
+	Describe("POST /api/v1/workflows/{id}/archive",
+		testWorkflowStateTransition("archive", "active", "archived", "archives an active workflow"))
 
 	Describe("POST /api/v1/workflows/{id}/executions", func() {
 		var workflowID string
