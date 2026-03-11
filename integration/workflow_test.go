@@ -293,7 +293,7 @@ func createWorkflow(baseURL string, client *http.Client, name string, steps []do
 	body, err := json.Marshal(input)
 	Expect(err).NotTo(HaveOccurred())
 
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/workflows", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/workflows", bytes.NewReader(body))
 	Expect(err).NotTo(HaveOccurred())
 	req.Header.Set("Content-Type", "application/json")
 
@@ -311,7 +311,7 @@ func createWorkflow(baseURL string, client *http.Client, name string, steps []do
 }
 
 func activateWorkflow(baseURL string, client *http.Client, workflowID string) {
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/workflows/"+workflowID+"/activate", nil)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/workflows/"+workflowID+"/activate", nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	resp, err := client.Do(req)
@@ -322,7 +322,7 @@ func activateWorkflow(baseURL string, client *http.Client, workflowID string) {
 }
 
 func triggerExecution(baseURL string, client *http.Client, workflowID string) *domain.Execution {
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/workflows/"+workflowID+"/executions", nil)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/workflows/"+workflowID+"/executions", nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	resp, err := client.Do(req)
@@ -339,7 +339,7 @@ func triggerExecution(baseURL string, client *http.Client, workflowID string) *d
 }
 
 func cancelExecution(baseURL string, client *http.Client, executionID string) {
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/executions/"+executionID+"/cancel", nil)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/executions/"+executionID+"/cancel", nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	resp, err := client.Do(req)
@@ -359,7 +359,7 @@ func pollExecutionUntilTerminal(baseURL string, client *http.Client, executionID
 			Fail(fmt.Sprintf("Timeout waiting for execution %s to reach terminal state", executionID))
 		}
 
-		req, err := http.NewRequest(http.MethodGet, baseURL+"/v1/executions/"+executionID, nil)
+		req, err := http.NewRequest(http.MethodGet, baseURL+"/api/v1/executions/"+executionID, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		resp, err := client.Do(req)
