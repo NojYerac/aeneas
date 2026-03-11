@@ -34,7 +34,7 @@ var _ = Describe("Workflow Integration Tests", func() {
 		server     *httptest.Server
 		ctx        context.Context
 		cancel     context.CancelFunc
-		database   *libdb.Database
+		database   libdb.Database
 		eng        *engine.Engine
 		dbPath     string
 		logger     *logrus.Logger
@@ -56,13 +56,32 @@ var _ = Describe("Workflow Integration Tests", func() {
 
 		// Initialize database
 		dbConfig := &libdb.Configuration{
-			Type:     libdb.SQLite,
-			Host:     dbPath,
-			Database: dbPath,
+			Driver:    "sqlite",
+			DBConnStr: dbPath,
 		}
 		database = libdb.NewDatabase(dbConfig, libdb.WithLogger(logger))
 		err = database.Open(ctx)
 		Expect(err).NotTo(HaveOccurred())
+
+		// Enable foreign key constraints for SQLite
+		_, err = database.Exec(ctx, "PRAGMA foreign_keys = ON;")
+		Expect(err).NotTo(HaveOccurred())
+
+		// Run migrations
+		migrationsPath := "../migrations"
+		files, err := os.ReadDir(migrationsPath)
+		Expect(err).NotTo(HaveOccurred())
+
+		for _, file := range files {
+			if file.IsDir() || !bytes.HasSuffix([]byte(file.Name()), []byte(".up.sql")) {
+				continue
+			}
+			migration, err := os.ReadFile(filepath.Join(migrationsPath, file.Name()))
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = database.Exec(ctx, string(migration))
+			Expect(err).NotTo(HaveOccurred())
+		}
 
 		// Initialize repositories
 		workflowRepo := db.NewWorkflowRepository(database, db.WithLogger(logger))
@@ -87,10 +106,7 @@ var _ = Describe("Workflow Integration Tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Initialize HTTP server
-		httpConfig := &libhttp.Configuration{
-			Port: 0, // Use random port
-		}
-		hSrv := libhttp.NewServer(httpConfig)
+		hSrv := libhttp.NewServer(nil) // Use default config for test server
 		httptransport.RegisterRoutes(hSrv, workflowSvc, executionSvc)
 
 		// Create test server
