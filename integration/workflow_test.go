@@ -322,7 +322,7 @@ func activateWorkflow(baseURL string, client *http.Client, workflowID string) {
 }
 
 func triggerExecution(baseURL string, client *http.Client, workflowID string) *domain.Execution {
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/workflows/"+workflowID+"/execute", nil)
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/v1/workflows/"+workflowID+"/executions", nil)
 	Expect(err).NotTo(HaveOccurred())
 
 	resp, err := client.Do(req)
