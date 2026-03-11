@@ -67,11 +67,16 @@ func main() { //nolint:unused // main is the entry point for the service.
 	executionSvc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
 
 	// engine (workflow execution orchestrator)
-	runner, err := initializeRunner(logger)
+	// Type assert logger to *logrus.Logger for runner and engine initialization
+	logrusLogger, ok := logger.(*logrus.Logger)
+	if !ok {
+		logger.Panic("logger is not *logrus.Logger")
+	}
+	runner, err := initializeRunner(logrusLogger)
 	if err != nil {
 		logger.WithError(err).Panic("failed to initialize runner")
 	}
-	eng := initializeEngine(workflowRepo, executionRepo, stepExecutionRepo, runner, logger)
+	eng := initializeEngine(workflowRepo, executionRepo, stepExecutionRepo, runner, logrusLogger)
 
 	// transports
 	hSrv := libhttp.NewServer(
