@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"time"
 
+	_ "modernc.org/sqlite" // SQLite driver
+
 	"github.com/nojyerac/aeneas/data/db"
 	"github.com/nojyerac/aeneas/domain"
 	"github.com/nojyerac/aeneas/engine"
