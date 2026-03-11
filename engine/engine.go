@@ -21,7 +21,6 @@ type Engine struct {
 	pollInterval      time.Duration
 	wg                sync.WaitGroup
 	stopChan          chan struct{}
-	mu                sync.Mutex
 }
 
 // Config holds engine configuration
@@ -34,7 +33,7 @@ func NewEngine(
 	workflowRepo domain.WorkflowRepository,
 	executionRepo domain.ExecutionRepository,
 	stepExecutionRepo domain.StepExecutionRepository,
-	runner runner.Runner,
+	r runner.Runner,
 	logger *logrus.Logger,
 	cfg Config,
 ) *Engine {
@@ -46,7 +45,7 @@ func NewEngine(
 		workflowRepo:      workflowRepo,
 		executionRepo:     executionRepo,
 		stepExecutionRepo: stepExecutionRepo,
-		runner:            runner,
+		runner:            r,
 		logger:            logger,
 		pollInterval:      cfg.PollInterval,
 		stopChan:          make(chan struct{}),
@@ -146,58 +145,8 @@ func (e *Engine) processExecution(ctx context.Context, workflow *domain.Workflow
 	}
 
 	// Execute steps sequentially
-	for i, step := range steps {
-		// Check if execution was canceled
-		currentExecution, err := e.executionRepo.Get(ctx, executionID)
-		if err != nil {
-			logger.WithError(err).Error("Failed to get execution status")
-			break
-		}
-		if currentExecution.Status == domain.ExecutionCanceled {
-			logger.Info("Execution canceled, skipping remaining steps")
-			e.skipRemainingSteps(ctx, steps[i:])
-			return
-		}
-
-		// Find the corresponding step definition
-		var stepDef *domain.StepDefinition
-		for _, def := range workflow.Steps {
-			if def.Name == step.StepName {
-				stepDef = &def
-				break
-			}
-		}
-
-		if stepDef == nil {
-			logger.WithField("step_name", step.StepName).Error("Step definition not found")
-			e.failExecution(ctx, executionID, fmt.Sprintf("step definition not found: %s", step.StepName))
-			e.skipRemainingSteps(ctx, steps[i+1:])
-			return
-		}
-
-		// Execute the step
-		if err := e.executeStep(ctx, step, *stepDef); err != nil {
-			logger.WithError(err).WithField("step_name", step.StepName).Error("Step execution failed")
-			e.failExecution(ctx, executionID, fmt.Sprintf("step %s failed: %v", step.StepName, err))
-			e.skipRemainingSteps(ctx, steps[i+1:])
-			return
-		}
-
-		// Check if step failed (non-zero exit code)
-		updatedStep, err := e.stepExecutionRepo.ListByExecution(ctx, executionID)
-		if err == nil {
-			for _, s := range updatedStep {
-				if s.ID == step.ID && s.ExitCode != nil && *s.ExitCode != 0 {
-					logger.WithFields(logrus.Fields{
-						"step_name": step.StepName,
-						"exit_code": *s.ExitCode,
-					}).Info("Step failed with non-zero exit code")
-					e.failExecution(ctx, executionID, fmt.Sprintf("step %s failed with exit code %d", step.StepName, *s.ExitCode))
-					e.skipRemainingSteps(ctx, steps[i+1:])
-					return
-				}
-			}
-		}
+	if err := e.executeSteps(ctx, executionID, workflow, steps); err != nil {
+		return
 	}
 
 	// Mark execution as succeeded
@@ -211,8 +160,95 @@ func (e *Engine) processExecution(ctx context.Context, workflow *domain.Workflow
 	logger.Info("Execution completed successfully")
 }
 
+// executeSteps executes all steps in sequence with cancellation checks
+func (e *Engine) executeSteps(
+	ctx context.Context,
+	executionID string,
+	workflow *domain.Workflow,
+	steps []*domain.StepExecution,
+) error {
+	logger := e.logger.WithField("execution_id", executionID)
+
+	for i, step := range steps {
+		// Check if execution was canceled
+		currentExecution, err := e.executionRepo.Get(ctx, executionID)
+		if err != nil {
+			logger.WithError(err).Error("Failed to get execution status")
+			return err
+		}
+		if currentExecution.Status == domain.ExecutionCanceled {
+			logger.Info("Execution canceled, skipping remaining steps")
+			e.skipRemainingSteps(ctx, steps[i:])
+			return fmt.Errorf("execution canceled")
+		}
+
+		// Find the corresponding step definition
+		stepDef := e.findStepDefinition(workflow, step.StepName)
+		if stepDef == nil {
+			logger.WithField("step_name", step.StepName).Error("Step definition not found")
+			e.failExecution(ctx, executionID, fmt.Sprintf("step definition not found: %s", step.StepName))
+			e.skipRemainingSteps(ctx, steps[i+1:])
+			return fmt.Errorf("step definition not found: %s", step.StepName)
+		}
+
+		// Execute the step
+		if err := e.executeStep(ctx, step, stepDef); err != nil {
+			logger.WithError(err).WithField("step_name", step.StepName).Error("Step execution failed")
+			e.failExecution(ctx, executionID, fmt.Sprintf("step %s failed: %v", step.StepName, err))
+			e.skipRemainingSteps(ctx, steps[i+1:])
+			return err
+		}
+
+		// Check if step failed (non-zero exit code)
+		if err := e.checkStepFailure(ctx, executionID, step, steps[i+1:]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// findStepDefinition finds a step definition by name in the workflow
+func (e *Engine) findStepDefinition(workflow *domain.Workflow, stepName string) *domain.StepDefinition {
+	for _, def := range workflow.Steps {
+		if def.Name == stepName {
+			return &def
+		}
+	}
+	return nil
+}
+
+// checkStepFailure checks if a step failed with a non-zero exit code
+func (e *Engine) checkStepFailure(
+	ctx context.Context,
+	executionID string,
+	step *domain.StepExecution,
+	remainingSteps []*domain.StepExecution,
+) error {
+	logger := e.logger.WithField("execution_id", executionID)
+
+	updatedSteps, err := e.stepExecutionRepo.ListByExecution(ctx, executionID)
+	if err != nil {
+		return nil
+	}
+
+	for _, s := range updatedSteps {
+		if s.ID == step.ID && s.ExitCode != nil && *s.ExitCode != 0 {
+			logger.WithFields(logrus.Fields{
+				"step_name": step.StepName,
+				"exit_code": *s.ExitCode,
+			}).Info("Step failed with non-zero exit code")
+			e.failExecution(ctx, executionID, fmt.Sprintf("step %s failed with exit code %d", step.StepName, *s.ExitCode))
+			e.skipRemainingSteps(ctx, remainingSteps)
+			return fmt.Errorf("step failed with exit code %d", *s.ExitCode)
+		}
+	}
+
+	return nil
+}
+
 // executeStep runs a single step and updates its status
-func (e *Engine) executeStep(ctx context.Context, step *domain.StepExecution, stepDef domain.StepDefinition) error {
+func (e *Engine) executeStep(ctx context.Context, step *domain.StepExecution, stepDef *domain.StepDefinition) error {
 	stepID := step.ID.String()
 	logger := e.logger.WithFields(logrus.Fields{
 		"step_id":   stepID,
@@ -229,7 +265,7 @@ func (e *Engine) executeStep(ctx context.Context, step *domain.StepExecution, st
 	}
 
 	// Execute the step using the runner
-	result, err := e.runner.Execute(ctx, stepDef)
+	result, err := e.runner.Execute(ctx, *stepDef)
 	finishedAt := time.Now()
 	step.FinishedAt = &finishedAt
 
@@ -263,6 +299,11 @@ func (e *Engine) executeStep(ctx context.Context, step *domain.StepExecution, st
 
 // failExecution marks an execution as failed
 func (e *Engine) failExecution(ctx context.Context, executionID, errorMsg string) {
+	e.logger.WithFields(logrus.Fields{
+		"execution_id": executionID,
+		"error":        errorMsg,
+	}).Error("Execution failed")
+
 	if err := e.executionRepo.UpdateStatus(ctx, executionID, domain.ExecutionFailed); err != nil {
 		e.logger.WithError(err).WithField("execution_id", executionID).Error("Failed to update execution status to Failed")
 	}
