@@ -40,7 +40,7 @@ type Config struct {
 
 // K8sRunner executes workflow steps as Kubernetes Jobs
 type K8sRunner struct {
-	client                  *kubernetes.Clientset
+	client                  kubernetes.Interface
 	namespace               string
 	cleanupRetentionSeconds int
 	logger                  *logrus.Logger
@@ -85,6 +85,23 @@ func NewK8sRunner(cfg Config, logger *logrus.Logger) (*K8sRunner, error) {
 		cleanupRetentionSeconds: cleanupRetention,
 		logger:                  logger,
 	}, nil
+}
+
+// NewK8sRunnerForTest creates a K8sRunner with a provided client for testing purposes.
+// This is exported to allow injection of fake clients in tests.
+func NewK8sRunnerForTest(client kubernetes.Interface, namespace string, cleanupRetentionSeconds int, logger *logrus.Logger) *K8sRunner {
+	if namespace == "" {
+		namespace = defaultNamespace
+	}
+	if cleanupRetentionSeconds == 0 {
+		cleanupRetentionSeconds = jobCleanupRetentionSec
+	}
+	return &K8sRunner{
+		client:                  client,
+		namespace:               namespace,
+		cleanupRetentionSeconds: cleanupRetentionSeconds,
+		logger:                  logger,
+	}
 }
 
 // Execute runs a workflow step as a Kubernetes Job
