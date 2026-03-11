@@ -164,6 +164,10 @@ func (e *Engine) processExecution(ctx context.Context, workflow *domain.Workflow
 	now := time.Now()
 	execution.StartedAt = &now
 	execution.Status = domain.ExecutionRunning
+	if err := e.executionRepo.Update(spanCtx, execution); err != nil {
+		logger.WithError(err).Error("Failed to update execution")
+		return fmt.Errorf("failed to update execution: %w", err)
+	}
 
 	// Process steps sequentially
 	for i, stepDef := range workflow.Steps {
@@ -202,13 +206,9 @@ func (e *Engine) processExecution(ctx context.Context, workflow *domain.Workflow
 			execution.Status = domain.ExecutionFailed
 			execution.Error = err.Error()
 
-			updateErr := e.executionRepo.UpdateStatus(
-				spanCtx,
-				execution.ID.String(),
-				domain.ExecutionFailed,
-			)
+			updateErr := e.executionRepo.Update(spanCtx, execution)
 			if updateErr != nil {
-				logger.WithError(updateErr).Error("Failed to mark execution as failed")
+				logger.WithError(updateErr).Error("Failed to update execution")
 			}
 
 			span.RecordError(err)
@@ -222,10 +222,10 @@ func (e *Engine) processExecution(ctx context.Context, workflow *domain.Workflow
 	execution.FinishedAt = &finishedAt
 	execution.Status = domain.ExecutionSucceeded
 
-	if err := e.executionRepo.UpdateStatus(spanCtx, execution.ID.String(), domain.ExecutionSucceeded); err != nil {
+	if err := e.executionRepo.Update(spanCtx, execution); err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to mark execution as succeeded")
-		return fmt.Errorf("failed to mark execution as succeeded: %w", err)
+		span.SetStatus(codes.Error, "failed to update execution")
+		return fmt.Errorf("failed to update execution: %w", err)
 	}
 
 	logger.Info("Execution completed successfully")

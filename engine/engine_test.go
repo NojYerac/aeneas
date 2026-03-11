@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -117,23 +118,30 @@ var _ = Describe("Engine", func() {
 
 				// Wait for execution to complete
 				Eventually(func() domain.ExecutionStatus {
-					return executionRepo.executions[testExecution.ID.String()].Status
+					exec, err := executionRepo.Get(ctx, testExecution.ID.String())
+					if err != nil {
+						return domain.ExecutionPending
+					}
+					return exec.Status
 				}, "2s", "50ms").Should(Equal(domain.ExecutionSucceeded))
 
 				_ = eng.Stop()
 
 				// Verify all steps were executed
-				Expect(stepExecutionRepo.stepExecutions).To(HaveLen(3))
+				steps, err := stepExecutionRepo.ListByExecution(ctx, testExecution.ID.String())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(steps).To(HaveLen(3))
 
 				// Verify step statuses
-				for _, step := range stepExecutionRepo.stepExecutions {
+				for _, step := range steps {
 					Expect(step.Status).To(Equal(domain.StepExecutionSucceeded))
 					Expect(step.ExitCode).NotTo(BeNil())
 					Expect(*step.ExitCode).To(Equal(0))
 				}
 
 				// Verify execution status
-				execution := executionRepo.executions[testExecution.ID.String()]
+				execution, err := executionRepo.Get(ctx, testExecution.ID.String())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(execution.Status).To(Equal(domain.ExecutionSucceeded))
 				Expect(execution.StartedAt).NotTo(BeNil())
 				Expect(execution.FinishedAt).NotTo(BeNil())
@@ -156,21 +164,28 @@ var _ = Describe("Engine", func() {
 
 				// Wait for execution to fail
 				Eventually(func() domain.ExecutionStatus {
-					return executionRepo.executions[testExecution.ID.String()].Status
+					exec, err := executionRepo.Get(ctx, testExecution.ID.String())
+					if err != nil {
+						return domain.ExecutionPending
+					}
+					return exec.Status
 				}, "2s", "50ms").Should(Equal(domain.ExecutionFailed))
 
 				_ = eng.Stop()
 
 				// Verify execution status
-				execution := executionRepo.executions[testExecution.ID.String()]
+				execution, err := executionRepo.Get(ctx, testExecution.ID.String())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(execution.Status).To(Equal(domain.ExecutionFailed))
 				Expect(execution.Error).To(ContainSubstring("step failed"))
 
 				// Verify step statuses
-				Expect(stepExecutionRepo.stepExecutions).To(HaveLen(3))
+				steps, err := stepExecutionRepo.ListByExecution(ctx, testExecution.ID.String())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(steps).To(HaveLen(3))
 
 				var step1, step2, step3 *domain.StepExecution
-				for _, step := range stepExecutionRepo.stepExecutions {
+				for _, step := range steps {
 					switch step.StepName {
 					case "step1":
 						step1 = step
@@ -206,21 +221,25 @@ var _ = Describe("Engine", func() {
 				time.Sleep(150 * time.Millisecond)
 
 				// Simulate external cancellation
-				executionRepo.executions[testExecution.ID.String()].Status = domain.ExecutionCanceled
+				err = executionRepo.UpdateStatus(ctx, testExecution.ID.String(), domain.ExecutionCanceled)
+				Expect(err).NotTo(HaveOccurred())
 
 				// Wait for engine to detect cancellation
 				Eventually(func() int {
-					return len(stepExecutionRepo.stepExecutions)
+					steps, _ := stepExecutionRepo.ListByExecution(ctx, testExecution.ID.String())
+					return len(steps)
 				}, "2s", "50ms").Should(BeNumerically(">=", 1))
 
 				_ = eng.Stop()
 
 				// Verify not all steps were executed
-				Expect(stepExecutionRepo.stepExecutions).To(HaveLen(3)) // step1 + skipped step2 + skipped step3
+				steps, err := stepExecutionRepo.ListByExecution(ctx, testExecution.ID.String())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(steps).To(HaveLen(3)) // step1 + skipped step2 + skipped step3
 
 				// Count skipped steps
 				skippedCount := 0
-				for _, step := range stepExecutionRepo.stepExecutions {
+				for _, step := range steps {
 					if step.Status == domain.StepExecutionSkipped {
 						skippedCount++
 					}
@@ -244,7 +263,8 @@ var _ = Describe("Engine", func() {
 				_ = eng.Stop()
 
 				// Verify execution was canceled
-				execution := executionRepo.executions[testExecution.ID.String()]
+				execution, err := executionRepo.Get(context.Background(), testExecution.ID.String())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(execution.Status).To(Equal(domain.ExecutionCanceled))
 			})
 		})
@@ -258,11 +278,15 @@ var _ = Describe("Engine", func() {
 				WorkflowID: testWorkflow.ID,
 				Status:     domain.ExecutionPending,
 			}
-			executionRepo.executions[execution2.ID.String()] = execution2
+			err := executionRepo.Create(ctx, execution2)
+			Expect(err).NotTo(HaveOccurred())
+
+			executionRepo.mu.Lock()
 			executionRepo.executionsByWorkflow[testWorkflow.ID.String()] = []*domain.Execution{
 				testExecution,
 				execution2,
 			}
+			executionRepo.mu.Unlock()
 
 			// Configure runner with delay to verify serial processing
 			runner.delay = 100 * time.Millisecond
@@ -272,24 +296,35 @@ var _ = Describe("Engine", func() {
 				"step3": {ExitCode: 0},
 			}
 
-			err := eng.Start(ctx)
+			err = eng.Start(ctx)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Wait for both executions to complete
 			Eventually(func() bool {
-				exec1 := executionRepo.executions[testExecution.ID.String()]
-				exec2 := executionRepo.executions[execution2.ID.String()]
+				exec1, err1 := executionRepo.Get(ctx, testExecution.ID.String())
+				exec2, err2 := executionRepo.Get(ctx, execution2.ID.String())
+				if err1 != nil || err2 != nil {
+					return false
+				}
 				return exec1.Status == domain.ExecutionSucceeded && exec2.Status == domain.ExecutionSucceeded
 			}, "5s", "100ms").Should(BeTrue())
 
 			_ = eng.Stop()
 
 			// Verify both executions succeeded
-			Expect(executionRepo.executions[testExecution.ID.String()].Status).To(Equal(domain.ExecutionSucceeded))
-			Expect(executionRepo.executions[execution2.ID.String()].Status).To(Equal(domain.ExecutionSucceeded))
+			exec1, err := executionRepo.Get(ctx, testExecution.ID.String())
+			Expect(err).NotTo(HaveOccurred())
+			exec2, err := executionRepo.Get(ctx, execution2.ID.String())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(exec1.Status).To(Equal(domain.ExecutionSucceeded))
+			Expect(exec2.Status).To(Equal(domain.ExecutionSucceeded))
 
 			// Verify total steps executed (3 per execution * 2 executions)
-			Expect(stepExecutionRepo.stepExecutions).To(HaveLen(6))
+			allSteps1, err := stepExecutionRepo.ListByExecution(ctx, testExecution.ID.String())
+			Expect(err).NotTo(HaveOccurred())
+			allSteps2, err := stepExecutionRepo.ListByExecution(ctx, execution2.ID.String())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(allSteps1) + len(allSteps2)).To(Equal(6))
 		})
 	})
 })
@@ -297,6 +332,7 @@ var _ = Describe("Engine", func() {
 // Mock implementations
 
 type mockWorkflowRepo struct {
+	mu        sync.RWMutex
 	workflows map[string]*domain.Workflow
 }
 
@@ -307,11 +343,15 @@ func newMockWorkflowRepo() *mockWorkflowRepo {
 }
 
 func (m *mockWorkflowRepo) Create(ctx context.Context, workflow *domain.Workflow) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.workflows[workflow.ID.String()] = workflow
 	return nil
 }
 
 func (m *mockWorkflowRepo) Get(ctx context.Context, id string) (*domain.Workflow, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	w, ok := m.workflows[id]
 	if !ok {
 		return nil, fmt.Errorf("workflow not found")
@@ -320,6 +360,8 @@ func (m *mockWorkflowRepo) Get(ctx context.Context, id string) (*domain.Workflow
 }
 
 func (m *mockWorkflowRepo) List(ctx context.Context, opts domain.ListOptions) ([]*domain.Workflow, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	result := make([]*domain.Workflow, 0, len(m.workflows))
 	for _, w := range m.workflows {
 		result = append(result, w)
@@ -328,11 +370,14 @@ func (m *mockWorkflowRepo) List(ctx context.Context, opts domain.ListOptions) ([
 }
 
 func (m *mockWorkflowRepo) Update(ctx context.Context, workflow *domain.Workflow) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.workflows[workflow.ID.String()] = workflow
 	return nil
 }
 
 type mockExecutionRepo struct {
+	mu                   sync.RWMutex
 	executions           map[string]*domain.Execution
 	executionsByWorkflow map[string][]*domain.Execution
 }
@@ -345,17 +390,29 @@ func newMockExecutionRepo() *mockExecutionRepo {
 }
 
 func (m *mockExecutionRepo) Create(ctx context.Context, execution *domain.Execution) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.executions[execution.ID.String()] = execution
 	return nil
 }
 
 func (m *mockExecutionRepo) Get(ctx context.Context, id string) (*domain.Execution, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	e, ok := m.executions[id]
 	if !ok {
 		return nil, fmt.Errorf("execution not found")
 	}
-	// Return a copy to allow concurrent updates
+	// Return a deep copy to allow concurrent updates
 	execCopy := *e
+	if e.StartedAt != nil {
+		startedCopy := *e.StartedAt
+		execCopy.StartedAt = &startedCopy
+	}
+	if e.FinishedAt != nil {
+		finishedCopy := *e.FinishedAt
+		execCopy.FinishedAt = &finishedCopy
+	}
 	return &execCopy, nil
 }
 
@@ -364,10 +421,44 @@ func (m *mockExecutionRepo) ListByWorkflow(
 	workflowID string,
 	opts domain.ListOptions,
 ) ([]*domain.Execution, error) {
-	return m.executionsByWorkflow[workflowID], nil
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	originals := m.executionsByWorkflow[workflowID]
+	// Return copies to prevent concurrent modification
+	copies := make([]*domain.Execution, len(originals))
+	for i, e := range originals {
+		execCopy := *e
+		if e.StartedAt != nil {
+			startedCopy := *e.StartedAt
+			execCopy.StartedAt = &startedCopy
+		}
+		if e.FinishedAt != nil {
+			finishedCopy := *e.FinishedAt
+			execCopy.FinishedAt = &finishedCopy
+		}
+		copies[i] = &execCopy
+	}
+	return copies, nil
+}
+
+func (m *mockExecutionRepo) Update(ctx context.Context, execution *domain.Execution) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.executions[execution.ID.String()]
+	if !ok {
+		return fmt.Errorf("execution not found")
+	}
+	// Update all fields
+	e.Status = execution.Status
+	e.StartedAt = execution.StartedAt
+	e.FinishedAt = execution.FinishedAt
+	e.Error = execution.Error
+	return nil
 }
 
 func (m *mockExecutionRepo) UpdateStatus(ctx context.Context, id string, status domain.ExecutionStatus) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	e, ok := m.executions[id]
 	if !ok {
 		return fmt.Errorf("execution not found")
@@ -377,6 +468,7 @@ func (m *mockExecutionRepo) UpdateStatus(ctx context.Context, id string, status 
 }
 
 type mockStepExecutionRepo struct {
+	mu             sync.RWMutex
 	stepExecutions []*domain.StepExecution
 }
 
@@ -387,6 +479,8 @@ func newMockStepExecutionRepo() *mockStepExecutionRepo {
 }
 
 func (m *mockStepExecutionRepo) Create(ctx context.Context, stepExecution *domain.StepExecution) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.stepExecutions = append(m.stepExecutions, stepExecution)
 	return nil
 }
@@ -395,6 +489,8 @@ func (m *mockStepExecutionRepo) ListByExecution(
 	ctx context.Context,
 	executionID string,
 ) ([]*domain.StepExecution, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	result := make([]*domain.StepExecution, 0)
 	for _, se := range m.stepExecutions {
 		if se.ExecutionID.String() == executionID {
@@ -410,6 +506,8 @@ func (m *mockStepExecutionRepo) UpdateStatus(
 	status domain.StepExecutionStatus,
 	exitCode *int,
 ) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, se := range m.stepExecutions {
 		if se.ID.String() == id {
 			se.Status = status
