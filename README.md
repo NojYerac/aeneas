@@ -138,13 +138,32 @@ aeneas/
 
 ## Running Locally
 
-### Prerequisites
+### Option 1: Docker Compose (Recommended)
+
+The fastest way to run Aeneas with all dependencies:
+
+```bash
+# Start PostgreSQL + Aeneas
+make up
+
+# View logs
+make logs
+
+# Access the service
+curl http://localhost:8080/health
+```
+
+See [DOCKER.md](DOCKER.md) for full Docker Compose documentation.
+
+### Option 2: Local Development
+
+#### Prerequisites
 
 - Go 1.21+
 - PostgreSQL 15+ (for persistence tests)
 - Make
 
-### Quick Start
+#### Quick Start
 
 ```bash
 # Install dependencies
@@ -153,7 +172,7 @@ go mod tidy
 # Run tests (includes integration tests)
 make test
 
-# Run the service locally
+# Run the service locally (requires PostgreSQL running)
 make run
 ```
 
