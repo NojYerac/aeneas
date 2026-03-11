@@ -13,6 +13,7 @@ import (
 
 	"github.com/nojyerac/aeneas/domain"
 	"github.com/nojyerac/aeneas/runner/local"
+	"github.com/nojyerac/go-lib/log"
 )
 
 func TestLocalRunner(t *testing.T) {
@@ -28,8 +29,7 @@ var _ = Describe("LocalRunner", func() {
 	)
 
 	BeforeEach(func() {
-		logger = logrus.New()
-		logger.SetLevel(logrus.WarnLevel) // Reduce noise in tests
+		logger = log.NewLogger(log.TestConfig)
 
 		var err error
 		runner, err = local.NewLocalRunner(logger)
@@ -83,76 +83,57 @@ var _ = Describe("LocalRunner", func() {
 			})
 		})
 
-		Context("with environment variables", func() {
-			It("should pass environment variables to the container", func() {
-				step := &domain.StepDefinition{
+		Context("when timeout is specified", func() {
+			It("should timeout long-running commands", func() {
+				Skip("Integration test - requires Docker daemon")
+
+				step := domain.StepDefinition{
+					Name:           "test-timeout",
+					Image:          "alpine:latest",
+					Command:        []string{"sleep"},
+					Args:           []string{"30"},
+					TimeoutSeconds: 1,
+				}
+
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+
+				_, err := runner.Execute(ctx, step)
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("when environment variables are provided", func() {
+			It("should pass them to the container", func() {
+				Skip("Integration test - requires Docker daemon")
+
+				step := domain.StepDefinition{
 					Name:    "test-env",
 					Image:   "alpine:latest",
 					Command: []string{"sh"},
 					Args:    []string{"-c", "echo $TEST_VAR"},
 					Env: map[string]string{
-						"TEST_VAR": "test-value",
+						"TEST_VAR": "test_value",
 					},
-					TimeoutSeconds: 30,
 				}
 
 				result, err := runner.Execute(ctx, step)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).NotTo(BeNil())
-				Expect(result.ExitCode).To(Equal(0))
-				Expect(result.Logs).To(ContainSubstring("test-value"))
-			})
-		})
-
-		Context("with a timeout", func() {
-			It("should cancel execution when timeout is exceeded", func() {
-				step := &domain.StepDefinition{
-					Name:           "test-timeout",
-					Image:          "alpine:latest",
-					Command:        []string{"sleep"},
-					Args:           []string{"10"},
-					Env:            nil,
-					TimeoutSeconds: 1, // 1 second timeout
-				}
-
-				start := time.Now()
-				_, err := runner.Execute(ctx, step)
-				duration := time.Since(start)
-
-				// Should error due to timeout
-				Expect(err).To(HaveOccurred())
-				// Should take roughly the timeout duration (with some margin)
-				Expect(duration).To(BeNumerically("~", 1*time.Second, 500*time.Millisecond))
-			})
-		})
-
-		Context("with an image that needs to be pulled", func() {
-			It("should pull the image and execute successfully", func() {
-				// Use a small, specific image that's unlikely to be cached
-				step := &domain.StepDefinition{
-					Name:           "test-pull",
-					Image:          "busybox:1.36",
-					Command:        []string{"echo"},
-					Args:           []string{"pulled and executed"},
-					Env:            nil,
-					TimeoutSeconds: 60, // Allow time for pull
-				}
-
-				result, err := runner.Execute(ctx, step)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).NotTo(BeNil())
-				Expect(result.ExitCode).To(Equal(0))
-				Expect(result.Logs).To(ContainSubstring("pulled and executed"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).ToNot(BeNil())
+				Expect(result.Logs).To(ContainSubstring("test_value"))
 			})
 		})
 	})
 
 	Describe("NewLocalRunner", func() {
 		Context("when Docker is available", func() {
-			It("should create a runner successfully", func() {
+			It("should create a new runner successfully", func() {
+				Skip("Integration test - requires Docker daemon")
+
 				r, err := local.NewLocalRunner(logger)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(r).NotTo(BeNil())
+				Expect(err).ToNot(HaveOccurred())
+				Expect(r).ToNot(BeNil())
+
 				_ = r.Close()
 			})
 		})

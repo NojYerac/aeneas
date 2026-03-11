@@ -6,7 +6,7 @@ import (
 	"github.com/nojyerac/aeneas/domain"
 )
 
-// Result contains the outcome of a step execution
+// Result represents the outcome of a step execution
 type Result struct {
 	ExitCode int
 	Logs     string
