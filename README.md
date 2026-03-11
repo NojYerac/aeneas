@@ -136,6 +136,52 @@ aeneas/
 
 ---
 
+## Try It: End-to-End Demo
+
+See Aeneas orchestrate a real workflow in under 60 seconds:
+
+```bash
+# Clone the repository
+git clone https://github.com/NojYerac/aeneas.git
+cd aeneas
+
+# Run the demo (requires Docker & Docker Compose)
+./scripts/demo.sh
+```
+
+**What it does:**
+1. Starts PostgreSQL and the Aeneas service
+2. Registers a 3-step ETL pipeline (extract → transform → load)
+3. Executes the workflow with live output
+4. Shows state transitions in the database
+
+**Live output:**
+```
+=========================================
+STEP 1: EXTRACT
+=========================================
+Fetching raw data from source...
+✓ Extracted 5 records to /data/raw.csv
+
+=========================================
+STEP 2: TRANSFORM
+=========================================
+Processing raw data...
+✓ Transformed 3 records (filtered low values)
+
+=========================================
+STEP 3: LOAD
+=========================================
+Loading transformed data to destination...
+✓ Inserted 3 records into target database
+
+Pipeline finished successfully! ✓
+```
+
+See [`examples/data-pipeline/README.md`](examples/data-pipeline/README.md) for details.
+
+---
+
 ## Running Locally
 
 ### Prerequisites

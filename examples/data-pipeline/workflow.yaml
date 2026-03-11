@@ -1,0 +1,53 @@
+apiVersion: aeneas.io/v1
+kind: Workflow
+metadata:
+  name: data-pipeline
+  description: Three-step ETL pipeline demonstrating sequential task orchestration
+spec:
+  steps:
+    - name: extract
+      image: alpine:3.19
+      command: ["/bin/sh", "/scripts/extract.sh"]
+      volumeMounts:
+        - name: pipeline-data
+          mountPath: /data
+        - name: extract-scripts
+          mountPath: /scripts
+      
+    - name: transform
+      image: alpine:3.19
+      command: ["/bin/sh", "/scripts/transform.sh"]
+      volumeMounts:
+        - name: pipeline-data
+          mountPath: /data
+        - name: transform-scripts
+          mountPath: /scripts
+      dependsOn:
+        - extract
+      
+    - name: load
+      image: alpine:3.19
+      command: ["/bin/sh", "/scripts/load.sh"]
+      volumeMounts:
+        - name: pipeline-data
+          mountPath: /data
+        - name: load-scripts
+          mountPath: /scripts
+      dependsOn:
+        - transform
+  
+  volumes:
+    - name: pipeline-data
+      emptyDir: {}
+    - name: extract-scripts
+      hostPath:
+        path: ./examples/data-pipeline/steps/extract
+        type: Directory
+    - name: transform-scripts
+      hostPath:
+        path: ./examples/data-pipeline/steps/transform
+        type: Directory
+    - name: load-scripts
+      hostPath:
+        path: ./examples/data-pipeline/steps/load
+        type: Directory
