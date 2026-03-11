@@ -117,7 +117,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("lists workflows with default pagination", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows", http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -128,11 +128,11 @@ var _ = Describe("HTTP Handlers", func() {
 			err := json.Unmarshal(w.Body.Bytes(), &resp)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(resp)).To(Equal(5))
+			Expect(resp).To(HaveLen(5))
 		})
 
 		It("lists workflows with custom limit and offset", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows?limit=2&offset=1", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows?limit=2&offset=1", http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -143,7 +143,7 @@ var _ = Describe("HTTP Handlers", func() {
 			err := json.Unmarshal(w.Body.Bytes(), &resp)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(resp)).To(Equal(2))
+			Expect(resp).To(HaveLen(2))
 		})
 	})
 
@@ -164,7 +164,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("retrieves a workflow by ID", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+workflowID, nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+workflowID, http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -180,7 +180,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("returns 404 for non-existent workflow", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+uuid.New().String(), nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+uuid.New().String(), http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -279,7 +279,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("activates a draft workflow", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/activate", nil)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/activate", http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -312,7 +312,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("archives an active workflow", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/archive", nil)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/archive", http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -345,7 +345,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("triggers a new execution", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/executions", nil)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/executions", http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -391,7 +391,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("lists executions for a workflow", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+workflowID+"/executions", nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+workflowID+"/executions", http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -402,7 +402,7 @@ var _ = Describe("HTTP Handlers", func() {
 			err := json.Unmarshal(w.Body.Bytes(), &resp)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(len(resp)).To(Equal(3))
+			Expect(resp).To(HaveLen(3))
 		})
 	})
 
@@ -445,7 +445,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("retrieves an execution with steps", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/executions/"+executionID, nil)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/executions/"+executionID, http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
@@ -461,7 +461,7 @@ var _ = Describe("HTTP Handlers", func() {
 
 			steps, ok := resp["steps"].([]interface{})
 			Expect(ok).To(BeTrue())
-			Expect(len(steps)).To(Equal(1))
+			Expect(steps).To(HaveLen(1))
 		})
 	})
 
@@ -493,7 +493,7 @@ var _ = Describe("HTTP Handlers", func() {
 		})
 
 		It("cancels a running execution", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/executions/"+executionID+"/cancel", nil)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/executions/"+executionID+"/cancel", http.NoBody)
 			w := httptest.NewRecorder()
 
 			server.ServeHTTP(w, req)
