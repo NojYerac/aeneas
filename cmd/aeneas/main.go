@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/nojyerac/aeneas/config"
 	"github.com/nojyerac/aeneas/data/db"
 	"github.com/nojyerac/aeneas/domain"
@@ -17,7 +19,6 @@ import (
 	"github.com/nojyerac/aeneas/service"
 	"github.com/nojyerac/aeneas/transport/http"
 	"github.com/nojyerac/aeneas/transport/rpc"
-	"github.com/sirupsen/logrus"
 	libdb "github.com/nojyerac/go-lib/db"
 	"github.com/nojyerac/go-lib/health"
 	"github.com/nojyerac/go-lib/log"
@@ -29,7 +30,7 @@ import (
 	"github.com/nojyerac/go-lib/version"
 )
 
-func main() { //nolint:unused // main is the entry point for the service.
+func main() { //nolint:unused,funlen // main is the entry point for the service.
 	// init & config
 	version.SetSemVer("0.0.0")
 	version.SetServiceName("aeneas")
@@ -72,11 +73,11 @@ func main() { //nolint:unused // main is the entry point for the service.
 	if !ok {
 		logger.Panic("logger is not *logrus.Logger")
 	}
-	runner, err := initializeRunner(logrusLogger)
+	runnr, err := initializeRunner(logrusLogger)
 	if err != nil {
 		logger.WithError(err).Panic("failed to initialize runner")
 	}
-	eng := initializeEngine(workflowRepo, executionRepo, stepExecutionRepo, runner, logrusLogger)
+	eng := initializeEngine(workflowRepo, executionRepo, stepExecutionRepo, runnr, logrusLogger)
 
 	// transports
 	hSrv := libhttp.NewServer(
@@ -146,6 +147,8 @@ func main() { //nolint:unused // main is the entry point for the service.
 
 // initializeRunner creates a runner based on configuration
 // Currently defaults to LocalRunner; can be extended to support K8sRunner based on config
+//
+//nolint:unused // Used by main
 func initializeRunner(logger *logrus.Logger) (runner.Runner, error) {
 	// TODO: Add config option to choose between LocalRunner and K8sRunner
 	// For now, default to LocalRunner
@@ -153,15 +156,17 @@ func initializeRunner(logger *logrus.Logger) (runner.Runner, error) {
 }
 
 // initializeEngine creates and configures the workflow execution engine
+//
+//nolint:unused // Used by main
 func initializeEngine(
 	workflowRepo domain.WorkflowRepository,
 	executionRepo domain.ExecutionRepository,
 	stepExecutionRepo domain.StepExecutionRepository,
-	runner runner.Runner,
+	runnr runner.Runner,
 	logger *logrus.Logger,
 ) *engine.Engine {
 	cfg := engine.Config{
 		PollInterval: 2 * time.Second, // TODO: Make configurable
 	}
-	return engine.NewEngine(workflowRepo, executionRepo, stepExecutionRepo, runner, logger, cfg)
+	return engine.NewEngine(workflowRepo, executionRepo, stepExecutionRepo, runnr, logger, cfg)
 }
