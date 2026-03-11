@@ -6,12 +6,18 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"time"
 
 	"github.com/nojyerac/aeneas/config"
 	"github.com/nojyerac/aeneas/data/db"
+	"github.com/nojyerac/aeneas/domain"
+	"github.com/nojyerac/aeneas/engine"
+	"github.com/nojyerac/aeneas/runner"
+	"github.com/nojyerac/aeneas/runner/local"
 	"github.com/nojyerac/aeneas/service"
 	"github.com/nojyerac/aeneas/transport/http"
 	"github.com/nojyerac/aeneas/transport/rpc"
+	"github.com/sirupsen/logrus"
 	libdb "github.com/nojyerac/go-lib/db"
 	"github.com/nojyerac/go-lib/health"
 	"github.com/nojyerac/go-lib/log"
@@ -60,6 +66,13 @@ func main() { //nolint:unused // main is the entry point for the service.
 	workflowSvc := service.NewWorkflowService(workflowRepo)
 	executionSvc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
 
+	// engine (workflow execution orchestrator)
+	runner, err := initializeRunner(logger)
+	if err != nil {
+		logger.WithError(err).Panic("failed to initialize runner")
+	}
+	eng := initializeEngine(workflowRepo, executionRepo, stepExecutionRepo, runner, logger)
+
 	// transports
 	hSrv := libhttp.NewServer(
 		config.HTTPConfig,
@@ -103,10 +116,47 @@ func main() { //nolint:unused // main is the entry point for the service.
 			logger.WithError(err).Panic("health checker error")
 		}
 	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := eng.Start(ctx); err != nil {
+			logger.WithError(err).Panic("engine error")
+		}
+	}()
 
 	logger.Info("Service starting")
 	<-ctx.Done()
 	logger.Info("Service stopping")
+
+	// Graceful shutdown: stop engine before closing database
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := eng.Stop(shutdownCtx); err != nil {
+		logger.WithError(err).Error("Engine shutdown error")
+	}
+
 	wg.Wait()
 	logger.Info("Service stopped")
+}
+
+// initializeRunner creates a runner based on configuration
+// Currently defaults to LocalRunner; can be extended to support K8sRunner based on config
+func initializeRunner(logger *logrus.Logger) (runner.Runner, error) {
+	// TODO: Add config option to choose between LocalRunner and K8sRunner
+	// For now, default to LocalRunner
+	return local.NewLocalRunner(logger)
+}
+
+// initializeEngine creates and configures the workflow execution engine
+func initializeEngine(
+	workflowRepo domain.WorkflowRepository,
+	executionRepo domain.ExecutionRepository,
+	stepExecutionRepo domain.StepExecutionRepository,
+	runner runner.Runner,
+	logger *logrus.Logger,
+) *engine.Engine {
+	cfg := engine.Config{
+		PollInterval: 2 * time.Second, // TODO: Make configurable
+	}
+	return engine.NewEngine(workflowRepo, executionRepo, stepExecutionRepo, runner, logger, cfg)
 }
