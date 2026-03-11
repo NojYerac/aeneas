@@ -175,6 +175,43 @@ func (r *ExecutionRepository) ListByWorkflow(
 	return executions, nil
 }
 
+func (r *ExecutionRepository) Update(ctx context.Context, execution *domain.Execution) error {
+	ctx, span := r.tracer.Start(ctx, "ExecutionRepository.Update")
+	defer span.End()
+
+	query := sq.Update("executions").
+		Set("status", string(execution.Status)).
+		Set("started_at", execution.StartedAt).
+		Set("finished_at", execution.FinishedAt).
+		Set("error", execution.Error).
+		Where(sq.Eq{"id": execution.ID.String()}).
+		PlaceholderFormat(sq.Dollar)
+
+	querySQL, args, err := query.ToSql()
+	if err != nil {
+		r.logger.WithError(err).Error("failed to build update query")
+		return err
+	}
+
+	result, err := r.db.Exec(ctx, querySQL, args...)
+	if err != nil {
+		r.logger.WithError(err).WithField("id", execution.ID.String()).Error("failed to update execution")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		r.logger.WithError(err).Error("failed to get rows affected")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrExecutionNotFound
+	}
+
+	return nil
+}
+
 func (r *ExecutionRepository) UpdateStatus(ctx context.Context, id string, status domain.ExecutionStatus) error {
 	ctx, span := r.tracer.Start(ctx, "ExecutionRepository.UpdateStatus")
 	defer span.End()
