@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/nojyerac/aeneas/config"
 	"github.com/nojyerac/aeneas/data/db"
 	"github.com/nojyerac/aeneas/domain"
 	"github.com/nojyerac/aeneas/engine"
@@ -109,8 +108,10 @@ var _ = Describe("Workflow Integration Tests", func() {
 		hSrv := libhttp.NewServer(nil) // Use default config for test server
 		httptransport.RegisterRoutes(hSrv, workflowSvc, executionSvc)
 
-		// Create test server
-		server = httptest.NewServer(hSrv.Handler())
+		// Create test server - wrap the server's ServeHTTP method
+		server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hSrv.ServeHTTP(w, r)
+		}))
 		baseURL = server.URL
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	})
