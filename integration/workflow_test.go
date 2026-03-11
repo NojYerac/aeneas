@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/google/uuid"
 	_ "modernc.org/sqlite" // SQLite driver
 
 	"github.com/nojyerac/aeneas/data/db"
@@ -374,17 +375,41 @@ func pollExecutionUntilTerminal(baseURL string, client *http.Client, executionID
 		}
 
 		var result struct {
-			Execution *domain.Execution        `json:"execution"`
-			Steps     []*domain.StepExecution `json:"steps"`
+			ID         string                       `json:"id"`
+			WorkflowID string                       `json:"workflow_id"`
+			Status     string                       `json:"status"`
+			StartedAt  *string                      `json:"started_at,omitempty"`
+			FinishedAt *string                      `json:"finished_at,omitempty"`
+			Error      string                       `json:"error,omitempty"`
+			Steps      []map[string]interface{}     `json:"steps,omitempty"`
 		}
 		err = json.Unmarshal(bodyBytes, &result)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Check if terminal state
-		if result.Execution.Status == domain.ExecutionSucceeded ||
-			result.Execution.Status == domain.ExecutionFailed ||
-			result.Execution.Status == domain.ExecutionCanceled {
-			return result.Execution, result.Steps
+		if result.Status == string(domain.ExecutionSucceeded) ||
+			result.Status == string(domain.ExecutionFailed) ||
+			result.Status == string(domain.ExecutionCanceled) {
+			// Convert back to domain types for return
+			exec := &domain.Execution{
+				Status: domain.ExecutionStatus(result.Status),
+			}
+			uuid.MustParse(result.ID) // validate UUID
+			
+			// Parse steps
+			steps := make([]*domain.StepExecution, len(result.Steps))
+			for i, stepData := range result.Steps {
+				steps[i] = &domain.StepExecution{
+					StepName: stepData["step_name"].(string),
+					Status:   domain.StepExecutionStatus(stepData["status"].(string)),
+				}
+				if exitCode, ok := stepData["exit_code"].(float64); ok {
+					ec := int(exitCode)
+					steps[i].ExitCode = &ec
+				}
+			}
+			
+			return exec, steps
 		}
 
 		<-ticker.C
