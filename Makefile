@@ -43,6 +43,32 @@ build: ## Compile binary
 docker: ## Build Docker image
 	docker build -t $(IMAGE_TAG) .
 
+# ── docker compose ────────────────────────────────────────────────────────────
+.PHONY: up
+up: ## Start all services with docker compose
+	docker compose up -d
+	@echo "Services started. Access Aeneas at http://localhost:8080"
+	@echo "Health check: http://localhost:8080/health"
+
+.PHONY: down
+down: ## Stop and remove all containers
+	docker compose down
+
+.PHONY: logs
+logs: ## Show logs from all services
+	docker compose logs -f
+
+.PHONY: ps
+ps: ## Show running containers
+	docker compose ps
+
+.PHONY: restart
+restart: down up ## Restart all services
+
+.PHONY: clean
+clean: down ## Stop containers and remove volumes
+	docker compose down -v
+
 # ── module hygiene ────────────────────────────────────────────────────────────
 .PHONY: tidy
 tidy: ## Tidy and vendor Go modules

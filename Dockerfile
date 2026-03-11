@@ -18,7 +18,9 @@ RUN CGO_ENABLED=0 go build \
     ./cmd/aeneas
 
 # ── runtime stage ─────────────────────────────────────────────────────────────
-FROM scratch
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates netcat-openbsd
 
 COPY --from=builder /out/aeneas /aeneas
 

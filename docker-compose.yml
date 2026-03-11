@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: aeneas-postgres
+    environment:
+      POSTGRES_DB: ${AENEAS_DB_NAME:-aeneas}
+      POSTGRES_USER: ${AENEAS_DB_USER:-aeneas}
+      POSTGRES_PASSWORD: ${AENEAS_DB_PASSWORD:-aeneas}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AENEAS_DB_USER:-aeneas} -d ${AENEAS_DB_NAME:-aeneas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aeneas
+
+  migrate:
+    image: migrate/migrate:latest
+    container_name: aeneas-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations
+    command: >
+      -path=/migrations
+      -database=postgres://${AENEAS_DB_USER:-aeneas}:${AENEAS_DB_PASSWORD:-aeneas}@postgres:5432/${AENEAS_DB_NAME:-aeneas}?sslmode=disable
+      up
+    networks:
+      - aeneas
+    restart: "no"
+
+  aeneas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aeneas-app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${AENEAS_PORT:-8080}:8080"
+    environment:
+      AENEAS_NO_TLS: "${AENEAS_NO_TLS:-true}"
+      AENEAS_PORT: "8080"
+      AENEAS_SERVICE_NAME: "aeneas"
+      AENEAS_LOG_LEVEL: "${AENEAS_LOG_LEVEL:-info}"
+      AENEAS_EXPORTER_TYPE: "${AENEAS_EXPORTER_TYPE:-stdout}"
+      AENEAS_HEALTHCHECK_CHECK_INTERVAL: "${AENEAS_HEALTHCHECK_CHECK_INTERVAL:-30s}"
+      AENEAS_DB_HOST: "postgres"
+      AENEAS_DB_PORT: "5432"
+      AENEAS_DB_NAME: "${AENEAS_DB_NAME:-aeneas}"
+      AENEAS_DB_USER: "${AENEAS_DB_USER:-aeneas}"
+      AENEAS_DB_PASSWORD: "${AENEAS_DB_PASSWORD:-aeneas}"
+      AENEAS_DB_SSL_MODE: "disable"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - aeneas
+
+volumes:
+  postgres_data:
+
+networks:
+  aeneas:
+    driver: bridge
