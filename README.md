@@ -25,6 +25,16 @@ Rather than adding features to existing tools, Aeneas explores how to build a fo
 
 ---
 
+## Is Aeneas Right for You?
+
+**TL;DR:** Aeneas is for small-to-medium teams orchestrating simple, Kubernetes-native workflows. If you need durable execution, multi-year workflows, or enterprise-scale orchestration, use Temporal, Argo, or Conductor instead.
+
+👉 **Read the full comparison**: [Aeneas vs. Temporal vs. Argo vs. Conductor](docs/COMPARISON.md)
+
+This document provides an honest assessment of when to use Aeneas (and when not to), including a feature matrix, architectural philosophy differences, and a decision framework to help you choose the right orchestrator for your use case.
+
+---
+
 ## Architecture
 
 Aeneas follows **hexagonal (ports & adapters) architecture** with a clean domain core:
