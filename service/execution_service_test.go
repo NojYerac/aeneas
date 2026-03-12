@@ -48,6 +48,11 @@ func (m *MockExecutionRepository) UpdateStatus(ctx context.Context, id string, s
 	return args.Error(0)
 }
 
+func (m *MockExecutionRepository) Update(ctx context.Context, execution *domain.Execution) error {
+	args := m.Called(ctx, execution)
+	return args.Error(0)
+}
+
 // MockStepExecutionRepository is a mock implementation of domain.StepExecutionRepository
 type MockStepExecutionRepository struct {
 	mock.Mock

@@ -24,6 +24,7 @@ type ExecutionRepository interface {
 	Create(ctx context.Context, execution *Execution) error
 	Get(ctx context.Context, id string) (*Execution, error)
 	ListByWorkflow(ctx context.Context, workflowID string, opts ListOptions) ([]*Execution, error)
+	Update(ctx context.Context, execution *Execution) error
 	UpdateStatus(ctx context.Context, id string, status ExecutionStatus) error
 }
 
