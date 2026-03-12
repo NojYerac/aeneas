@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var _ runner.Runner = (*LocalRunner)(nil)
+
 // LocalRunner executes workflow steps using Docker containers on the local machine
 type LocalRunner struct {
 	client *client.Client
@@ -34,7 +36,7 @@ func NewLocalRunner(logger *logrus.Logger) (*LocalRunner, error) {
 }
 
 // Execute runs a workflow step in a Docker container
-func (r *LocalRunner) Execute(ctx context.Context, step domain.StepDefinition) (*runner.Result, error) {
+func (r *LocalRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*runner.Result, error) {
 	// Set timeout if specified
 	if step.TimeoutSeconds > 0 {
 		var cancel context.CancelFunc
@@ -118,9 +120,9 @@ func (r *LocalRunner) ensureImage(ctx context.Context, imageName string) error {
 		return fmt.Errorf("failed to list images: %w", err)
 	}
 
-	for _, img := range images {
-		for _, tag := range img.RepoTags {
-			if tag == imageName {
+	for i := 0; i < len(images); i++ {
+		for j := 0; j < len(images[i].RepoTags); j++ {
+			if images[i].RepoTags[j] == imageName {
 				// Image already exists
 				return nil
 			}

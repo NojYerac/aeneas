@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package local_test
@@ -48,7 +49,7 @@ var _ = Describe("LocalRunner", func() {
 	Describe("Execute", func() {
 		Context("with a simple successful command", func() {
 			It("should execute and return exit code 0", func() {
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:           "test-echo",
 					Image:          "alpine:latest",
 					Command:        []string{"echo"},
@@ -67,7 +68,7 @@ var _ = Describe("LocalRunner", func() {
 
 		Context("with a failing command", func() {
 			It("should return non-zero exit code", func() {
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:           "test-fail",
 					Image:          "alpine:latest",
 					Command:        []string{"sh"},
@@ -85,7 +86,7 @@ var _ = Describe("LocalRunner", func() {
 
 		Context("with environment variables", func() {
 			It("should pass environment variables to the container", func() {
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:    "test-env",
 					Image:   "alpine:latest",
 					Command: []string{"sh"},
@@ -106,7 +107,7 @@ var _ = Describe("LocalRunner", func() {
 
 		Context("with a timeout", func() {
 			It("should cancel execution when timeout is exceeded", func() {
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:           "test-timeout",
 					Image:          "alpine:latest",
 					Command:        []string{"sleep"},
@@ -129,7 +130,7 @@ var _ = Describe("LocalRunner", func() {
 		Context("with an image that needs to be pulled", func() {
 			It("should pull the image and execute successfully", func() {
 				// Use a small, specific image that's unlikely to be cached
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:           "test-pull",
 					Image:          "busybox:1.36",
 					Command:        []string{"echo"},

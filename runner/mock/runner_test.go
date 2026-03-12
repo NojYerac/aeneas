@@ -31,7 +31,7 @@ var _ = Describe("MockRunner", func() {
 	Describe("Execute", func() {
 		Context("with default behavior", func() {
 			It("should return success with default logs", func() {
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:  "test-step",
 					Image: "alpine:latest",
 				}
@@ -44,8 +44,8 @@ var _ = Describe("MockRunner", func() {
 			})
 
 			It("should track executed steps", func() {
-				step1 := domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
-				step2 := domain.StepDefinition{Name: "step-2", Image: "ubuntu:latest"}
+				step1 := &domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
+				step2 := &domain.StepDefinition{Name: "step-2", Image: "ubuntu:latest"}
 
 				_, _ = runner.Execute(ctx, step1)
 				_, _ = runner.Execute(ctx, step2)
@@ -61,7 +61,7 @@ var _ = Describe("MockRunner", func() {
 			It("should return the configured result for a step", func() {
 				runner.WithResponse("custom-step", 42, "custom logs")
 
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:  "custom-step",
 					Image: "alpine:latest",
 				}
@@ -79,9 +79,9 @@ var _ = Describe("MockRunner", func() {
 					WithResponse("step-2", 1, "logs-2").
 					WithError("step-3", errors.New("mock error"))
 
-				step1 := domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
-				step2 := domain.StepDefinition{Name: "step-2", Image: "alpine:latest"}
-				step3 := domain.StepDefinition{Name: "step-3", Image: "alpine:latest"}
+				step1 := &domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
+				step2 := &domain.StepDefinition{Name: "step-2", Image: "alpine:latest"}
+				step3 := &domain.StepDefinition{Name: "step-3", Image: "alpine:latest"}
 
 				result1, err1 := runner.Execute(ctx, step1)
 				Expect(err1).NotTo(HaveOccurred())
@@ -104,7 +104,7 @@ var _ = Describe("MockRunner", func() {
 				expectedErr := errors.New("test error")
 				runner.WithError("failing-step", expectedErr)
 
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:  "failing-step",
 					Image: "alpine:latest",
 				}
@@ -119,7 +119,7 @@ var _ = Describe("MockRunner", func() {
 					WithResponse("step-1", 0, "success logs").
 					WithError("step-1", errors.New("error takes precedence"))
 
-				step := domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
+				step := &domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
 
 				result, err := runner.Execute(ctx, step)
 				Expect(err).To(MatchError("error takes precedence"))
@@ -137,8 +137,8 @@ var _ = Describe("MockRunner", func() {
 
 		Context("when steps have been executed", func() {
 			It("should return the most recent step", func() {
-				step1 := domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
-				step2 := domain.StepDefinition{Name: "step-2", Image: "ubuntu:latest"}
+				step1 := &domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
+				step2 := &domain.StepDefinition{Name: "step-2", Image: "ubuntu:latest"}
 
 				_, _ = runner.Execute(ctx, step1)
 				_, _ = runner.Execute(ctx, step2)
@@ -156,7 +156,7 @@ var _ = Describe("MockRunner", func() {
 				WithResponse("step-1", 0, "logs").
 				WithError("step-2", errors.New("error"))
 
-			step := domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
+			step := &domain.StepDefinition{Name: "step-1", Image: "alpine:latest"}
 			_, _ = runner.Execute(ctx, step)
 
 			Expect(runner.GetExecutionCount()).To(Equal(1))

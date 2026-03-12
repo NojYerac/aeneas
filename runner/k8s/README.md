@@ -22,51 +22,51 @@ The Kubernetes Job Runner (`runner/k8s`) implements the `runner.Runner` interfac
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
+    "context"
+    "fmt"
+    "log"
 
-	"github.com/nojyerac/aeneas/domain"
-	"github.com/nojyerac/aeneas/runner/k8s"
-	"github.com/sirupsen/logrus"
+    "github.com/nojyerac/aeneas/domain"
+    "github.com/nojyerac/aeneas/runner/k8s"
+    "github.com/sirupsen/logrus"
 )
 
 func main() {
-	logger := logrus.New()
+    logger := logrus.New()
 
-	// Configure the runner
-	cfg := k8s.Config{
-		Namespace:               "aeneas",              // Optional, default: "aeneas"
-		Kubeconfig:              "",                     // Optional, uses in-cluster config if empty
-		CleanupRetentionSeconds: 300,                    // Optional, default: 300
-	}
+    // Configure the runner
+    cfg := k8s.Config{
+        Namespace:               "aeneas",              // Optional, default: "aeneas"
+        Kubeconfig:              "",                     // Optional, uses in-cluster config if empty
+        CleanupRetentionSeconds: 300,                    // Optional, default: 300
+    }
 
-	// Create the runner
-	runner, err := k8s.NewK8sRunner(cfg, logger)
-	if err != nil {
-		log.Fatalf("Failed to create K8s runner: %v", err)
-	}
+    // Create the runner
+    runner, err := k8s.NewK8sRunner(cfg, logger)
+    if err != nil {
+        log.Fatalf("Failed to create K8s runner: %v", err)
+    }
 
-	// Define a step
-	step := domain.StepDefinition{
-		Name:    "hello-world",
-		Image:   "alpine:latest",
-		Command: []string{"echo"},
-		Args:    []string{"Hello from Kubernetes!"},
-		Env: map[string]string{
-			"MY_VAR": "my-value",
-		},
-		TimeoutSeconds: 60,
-	}
+    // Define a step
+    step := domain.StepDefinition{
+        Name:    "hello-world",
+        Image:   "alpine:latest",
+        Command: []string{"echo"},
+        Args:    []string{"Hello from Kubernetes!"},
+        Env: map[string]string{
+            "MY_VAR": "my-value",
+        },
+        TimeoutSeconds: 60,
+    }
 
-	// Execute the step
-	result, err := runner.Execute(context.Background(), step)
-	if err != nil {
-		log.Fatalf("Failed to execute step: %v", err)
-	}
+    // Execute the step
+    result, err := runner.Execute(context.Background(), step)
+    if err != nil {
+        log.Fatalf("Failed to execute step: %v", err)
+    }
 
-	fmt.Printf("Exit Code: %d\n", result.ExitCode)
-	fmt.Printf("Logs:\n%s\n", result.Logs)
+    fmt.Printf("Exit Code: %d\n", result.ExitCode)
+    fmt.Printf("Logs:\n%s\n", result.Logs)
 }
 ```
 
@@ -78,8 +78,8 @@ When running inside a Kubernetes cluster (e.g., as a Pod):
 
 ```go
 cfg := k8s.Config{
-	Namespace: "aeneas",
-	// Kubeconfig is empty, so in-cluster config is used
+    Namespace: "aeneas",
+    // Kubeconfig is empty, so in-cluster config is used
 }
 ```
 
@@ -89,8 +89,8 @@ When running outside a Kubernetes cluster (e.g., local development):
 
 ```go
 cfg := k8s.Config{
-	Namespace:  "aeneas",
-	Kubeconfig: "/path/to/.kube/config",
+    Namespace:  "aeneas",
+    Kubeconfig: "/path/to/.kube/config",
 }
 ```
 
@@ -100,8 +100,8 @@ Control how long completed Jobs are retained before automatic deletion:
 
 ```go
 cfg := k8s.Config{
-	Namespace:               "aeneas",
-	CleanupRetentionSeconds: 600, // 10 minutes
+    Namespace:               "aeneas",
+    CleanupRetentionSeconds: 600, // 10 minutes
 }
 ```
 
@@ -120,6 +120,7 @@ Example: `aeneas-a1b2c3d4-my-build-step`
 ### Labels
 
 Each Job is labeled with:
+
 - `app: aeneas`
 - `execution-id: {full-uuid}`
 - `step-name: {step-name}`
@@ -183,11 +184,11 @@ kubectl cluster-info --context kind-aeneas-test
 
 ```go
 step := domain.StepDefinition{
-	Name:           "test-success",
-	Image:          "alpine:latest",
-	Command:        []string{"echo"},
-	Args:           []string{"Hello Kubernetes!"},
-	TimeoutSeconds: 60,
+    Name:           "test-success",
+    Image:          "alpine:latest",
+    Command:        []string{"echo"},
+    Args:           []string{"Hello Kubernetes!"},
+    TimeoutSeconds: 60,
 }
 
 result, err := runner.Execute(ctx, step)
@@ -195,6 +196,7 @@ result, err := runner.Execute(ctx, step)
 ```
 
 **Verify:**
+
 ```bash
 kubectl get jobs -n aeneas
 kubectl get pods -n aeneas
@@ -205,11 +207,11 @@ kubectl logs <pod-name> -n aeneas
 
 ```go
 step := domain.StepDefinition{
-	Name:           "test-failure",
-	Image:          "alpine:latest",
-	Command:        []string{"sh"},
-	Args:           []string{"-c", "exit 42"},
-	TimeoutSeconds: 60,
+    Name:           "test-failure",
+    Image:          "alpine:latest",
+    Command:        []string{"sh"},
+    Args:           []string{"-c", "exit 42"},
+    TimeoutSeconds: 60,
 }
 
 result, err := runner.Execute(ctx, step)
@@ -217,6 +219,7 @@ result, err := runner.Execute(ctx, step)
 ```
 
 **Verify:**
+
 ```bash
 kubectl get jobs -n aeneas
 kubectl describe job <job-name> -n aeneas
@@ -226,14 +229,14 @@ kubectl describe job <job-name> -n aeneas
 
 ```go
 step := domain.StepDefinition{
-	Name:    "test-env",
-	Image:   "alpine:latest",
-	Command: []string{"sh"},
-	Args:    []string{"-c", "echo $TEST_VAR"},
-	Env: map[string]string{
-		"TEST_VAR": "test-value",
-	},
-	TimeoutSeconds: 60,
+    Name:    "test-env",
+    Image:   "alpine:latest",
+    Command: []string{"sh"},
+    Args:    []string{"-c", "echo $TEST_VAR"},
+    Env: map[string]string{
+        "TEST_VAR": "test-value",
+    },
+    TimeoutSeconds: 60,
 }
 
 result, err := runner.Execute(ctx, step)
@@ -241,6 +244,7 @@ result, err := runner.Execute(ctx, step)
 ```
 
 **Verify:**
+
 ```bash
 kubectl get pods -n aeneas
 kubectl logs <pod-name> -n aeneas
@@ -250,11 +254,11 @@ kubectl logs <pod-name> -n aeneas
 
 ```go
 step := domain.StepDefinition{
-	Name:           "test-timeout",
-	Image:          "alpine:latest",
-	Command:        []string{"sleep"},
-	Args:           []string{"120"},
-	TimeoutSeconds: 5, // 5 seconds
+    Name:           "test-timeout",
+    Image:          "alpine:latest",
+    Command:        []string{"sleep"},
+    Args:           []string{"120"},
+    TimeoutSeconds: 5, // 5 seconds
 }
 
 result, err := runner.Execute(ctx, step)
@@ -262,6 +266,7 @@ result, err := runner.Execute(ctx, step)
 ```
 
 **Verify:**
+
 ```bash
 kubectl describe job <job-name> -n aeneas
 # Should show: "Job has reached the specified deadline"
@@ -271,11 +276,11 @@ kubectl describe job <job-name> -n aeneas
 
 ```go
 step := domain.StepDefinition{
-	Name:    "test-long-running",
-	Image:   "alpine:latest",
-	Command: []string{"sh"},
-	Args:    []string{"-c", "for i in $(seq 1 10); do echo Iteration $i; sleep 2; done"},
-	TimeoutSeconds: 60,
+    Name:    "test-long-running",
+    Image:   "alpine:latest",
+    Command: []string{"sh"},
+    Args:    []string{"-c", "for i in $(seq 1 10); do echo Iteration $i; sleep 2; done"},
+    TimeoutSeconds: 60,
 }
 
 result, err := runner.Execute(ctx, step)
@@ -283,6 +288,7 @@ result, err := runner.Execute(ctx, step)
 ```
 
 **Verify:**
+
 ```bash
 kubectl logs <pod-name> -n aeneas -f
 # Should stream logs in real-time
@@ -292,18 +298,18 @@ kubectl logs <pod-name> -n aeneas -f
 
 ```go
 cfg := k8s.Config{
-	Namespace:               "aeneas",
-	CleanupRetentionSeconds: 10, // 10 seconds
+    Namespace:               "aeneas",
+    CleanupRetentionSeconds: 10, // 10 seconds
 }
 
 runner, _ := k8s.NewK8sRunner(cfg, logger)
 
 step := domain.StepDefinition{
-	Name:           "test-cleanup",
-	Image:          "alpine:latest",
-	Command:        []string{"echo"},
-	Args:           []string{"cleanup test"},
-	TimeoutSeconds: 60,
+    Name:           "test-cleanup",
+    Image:          "alpine:latest",
+    Command:        []string{"echo"},
+    Args:           []string{"cleanup test"},
+    TimeoutSeconds: 60,
 }
 
 runner.Execute(ctx, step)
@@ -313,6 +319,7 @@ time.Sleep(15 * time.Second)
 ```
 
 **Verify:**
+
 ```bash
 kubectl get jobs -n aeneas
 # Job should be automatically deleted after TTL expires
@@ -364,6 +371,7 @@ kubectl delete pods --all -n aeneas
 **Symptoms**: `failed to create job` error
 
 **Solutions**:
+
 1. Verify namespace exists: `kubectl get namespace aeneas`
 2. Check RBAC permissions: Ensure service account has permissions to create Jobs
 3. Verify kubeconfig path and cluster connectivity
@@ -373,6 +381,7 @@ kubectl delete pods --all -n aeneas
 **Symptoms**: `failed to retrieve pod logs` error
 
 **Solutions**:
+
 1. Check if Pod exists: `kubectl get pods -n aeneas`
 2. Verify Pod status: `kubectl describe pod <pod-name> -n aeneas`
 3. Ensure container name is `step`
@@ -382,6 +391,7 @@ kubectl delete pods --all -n aeneas
 **Symptoms**: Old Jobs remain in cluster
 
 **Solutions**:
+
 1. Verify TTLSecondsAfterFinished is supported (Kubernetes 1.21+)
 2. Check TTL controller is enabled in cluster
 3. Manually clean up: `kubectl delete jobs --all -n aeneas`
@@ -391,6 +401,7 @@ kubectl delete pods --all -n aeneas
 **Symptoms**: Job runs longer than TimeoutSeconds
 
 **Solutions**:
+
 1. Verify ActiveDeadlineSeconds is set on Job spec
 2. Check Job status: `kubectl describe job <job-name> -n aeneas`
 3. Ensure Kubernetes version supports ActiveDeadlineSeconds

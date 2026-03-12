@@ -35,14 +35,16 @@ type Config struct {
 	Kubeconfig string
 
 	// CleanupRetentionSeconds defines how long to keep completed Jobs before deletion (default: 300)
-	CleanupRetentionSeconds int
+	CleanupRetentionSeconds int32
 }
+
+var _ runner.Runner = (*K8sRunner)(nil)
 
 // K8sRunner executes workflow steps as Kubernetes Jobs
 type K8sRunner struct {
 	client                  kubernetes.Interface
 	namespace               string
-	cleanupRetentionSeconds int
+	cleanupRetentionSeconds int32
 	logger                  *logrus.Logger
 }
 
@@ -89,7 +91,12 @@ func NewK8sRunner(cfg Config, logger *logrus.Logger) (*K8sRunner, error) {
 
 // NewK8sRunnerForTest creates a K8sRunner with a provided client for testing purposes.
 // This is exported to allow injection of fake clients in tests.
-func NewK8sRunnerForTest(client kubernetes.Interface, namespace string, cleanupRetentionSeconds int, logger *logrus.Logger) *K8sRunner {
+func NewK8sRunnerForTest(
+	client kubernetes.Interface,
+	namespace string,
+	cleanupRetentionSeconds int32,
+	logger *logrus.Logger,
+) *K8sRunner {
 	if namespace == "" {
 		namespace = defaultNamespace
 	}
@@ -105,7 +112,7 @@ func NewK8sRunnerForTest(client kubernetes.Interface, namespace string, cleanupR
 }
 
 // Execute runs a workflow step as a Kubernetes Job
-func (r *K8sRunner) Execute(ctx context.Context, step domain.StepDefinition) (*runner.Result, error) {
+func (r *K8sRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*runner.Result, error) {
 	// Generate a unique execution ID for the job
 	executionID := uuid.New().String()
 
@@ -191,7 +198,7 @@ func (r *K8sRunner) generateJobName(executionID, stepName string) string {
 }
 
 // buildJob constructs a Kubernetes Job from a StepDefinition
-func (r *K8sRunner) buildJob(jobName, executionID string, step domain.StepDefinition) *batchv1.Job {
+func (r *K8sRunner) buildJob(jobName, executionID string, step *domain.StepDefinition) *batchv1.Job {
 	// Prepare environment variables
 	env := make([]corev1.EnvVar, 0, len(step.Env))
 	for k, v := range step.Env {
@@ -214,7 +221,7 @@ func (r *K8sRunner) buildJob(jobName, executionID string, step domain.StepDefini
 
 	// Build the Job
 	backoffLimit := int32(0) // No retries at K8s level
-	ttlSecondsAfterFinished := int32(r.cleanupRetentionSeconds)
+	ttlSecondsAfterFinished := r.cleanupRetentionSeconds
 
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -332,7 +339,8 @@ func (r *K8sRunner) getJobExitCode(ctx context.Context, job *batchv1.Job) int {
 	}
 
 	// Check container status for exit code
-	for _, containerStatus := range pod.Status.ContainerStatuses {
+	for i := 0; i < len(pod.Status.ContainerStatuses); i++ {
+		containerStatus := pod.Status.ContainerStatuses[i]
 		if containerStatus.Name == "step" {
 			if containerStatus.State.Terminated != nil {
 				return int(containerStatus.State.Terminated.ExitCode)
@@ -388,7 +396,7 @@ func (r *K8sRunner) getPodLogs(ctx context.Context, podName string) (string, err
 }
 
 // cleanupJob deletes a completed Job
-func (r *K8sRunner) cleanupJob(ctx context.Context, jobName string) {
+func (r *K8sRunner) cleanupJob(_ context.Context, jobName string) {
 	// Note: With TTLSecondsAfterFinished set, Kubernetes will automatically clean up
 	// the Job after the retention period. This method is kept for explicit cleanup
 	// if needed in the future.

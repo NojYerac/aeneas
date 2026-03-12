@@ -14,5 +14,5 @@ type Result struct {
 
 // Runner defines the interface for executing workflow steps
 type Runner interface {
-	Execute(ctx context.Context, step domain.StepDefinition) (*Result, error)
+	Execute(ctx context.Context, step *domain.StepDefinition) (*Result, error)
 }

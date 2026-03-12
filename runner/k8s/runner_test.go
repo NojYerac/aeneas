@@ -76,7 +76,7 @@ var _ = Describe("K8sRunner", func() {
 				cfg := k8srunner.Config{
 					CleanupRetentionSeconds: 1200,
 				}
-				Expect(cfg.CleanupRetentionSeconds).To(Equal(1200))
+				Expect(cfg.CleanupRetentionSeconds).To(BeEquivalentTo(1200))
 			})
 
 			It("should allow kubeconfig path for out-of-cluster access", func() {
@@ -94,14 +94,14 @@ var _ = Describe("K8sRunner", func() {
 				}
 				Expect(cfg.Namespace).To(Equal("prod"))
 				Expect(cfg.Kubeconfig).To(Equal("/etc/kubeconfig"))
-				Expect(cfg.CleanupRetentionSeconds).To(Equal(600))
+				Expect(cfg.CleanupRetentionSeconds).To(BeEquivalentTo(600))
 			})
 		})
 	})
 
 	Describe("StepDefinition Integration", func() {
 		It("should accept various StepDefinition configurations", func() {
-			step := domain.StepDefinition{
+			step := &domain.StepDefinition{
 				Name:           "build-image",
 				Image:          "docker:latest",
 				Command:        []string{"docker"},
@@ -113,27 +113,27 @@ var _ = Describe("K8sRunner", func() {
 			Expect(step.Name).To(Equal("build-image"))
 			Expect(step.Image).To(Equal("docker:latest"))
 			Expect(step.Command).To(Equal([]string{"docker"}))
-			Expect(len(step.Args)).To(Equal(4)) // "build", "-t", "myapp:v1", "."
+			Expect(step.Args).To(HaveLen(4)) // "build", "-t", "myapp:v1", "."
 			Expect(step.Env["DOCKER_HOST"]).To(Equal("unix:///var/run/docker.sock"))
-			Expect(int(step.TimeoutSeconds)).To(Equal(300))
+			Expect(step.TimeoutSeconds).To(Equal(300))
 		})
 
 		It("should handle empty optional fields in StepDefinition", func() {
-			step := domain.StepDefinition{
+			step := &domain.StepDefinition{
 				Name:  "simple-echo",
 				Image: "alpine:latest",
 			}
 
 			Expect(step.Name).NotTo(BeEmpty())
 			Expect(step.Image).NotTo(BeEmpty())
-			Expect(len(step.Command)).To(Equal(0))
-			Expect(len(step.Args)).To(Equal(0))
-			Expect(len(step.Env)).To(Equal(0))
-			Expect(int(step.TimeoutSeconds)).To(Equal(0))
+			Expect(step.Command).To(BeEmpty())
+			Expect(step.Args).To(BeEmpty())
+			Expect(step.Env).To(BeEmpty())
+			Expect(step.TimeoutSeconds).To(Equal(0))
 		})
 
 		It("should support complex command chains", func() {
-			step := domain.StepDefinition{
+			step := &domain.StepDefinition{
 				Name:    "bash-script",
 				Image:   "ubuntu:latest",
 				Command: []string{"bash"},
@@ -146,8 +146,8 @@ var _ = Describe("K8sRunner", func() {
 			}
 
 			Expect(step.Name).To(Equal("bash-script"))
-			Expect(len(step.Env)).To(Equal(2))
-			Expect(int(step.TimeoutSeconds)).To(Equal(600))
+			Expect(step.Env).To(HaveLen(2))
+			Expect(step.TimeoutSeconds).To(Equal(600))
 		})
 	})
 

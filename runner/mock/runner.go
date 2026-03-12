@@ -8,6 +8,8 @@ import (
 	"github.com/nojyerac/aeneas/runner"
 )
 
+var _ runner.Runner = (*MockRunner)(nil)
+
 // MockRunner is a mock implementation of the Runner interface for testing
 type MockRunner struct {
 	// Responses maps step names to their configured results
@@ -43,9 +45,9 @@ func (m *MockRunner) WithError(stepName string, err error) *MockRunner {
 }
 
 // Execute implements the Runner interface
-func (m *MockRunner) Execute(ctx context.Context, step domain.StepDefinition) (*runner.Result, error) {
+func (m *MockRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*runner.Result, error) {
 	// Track execution
-	m.ExecutedSteps = append(m.ExecutedSteps, step)
+	m.ExecutedSteps = append(m.ExecutedSteps, *step)
 
 	// Check for configured error
 	if err, ok := m.Errors[step.Name]; ok {
