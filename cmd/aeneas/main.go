@@ -1,4 +1,4 @@
-package aeneas
+package main
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 	"github.com/nojyerac/go-lib/version"
 )
 
-func main() { //nolint:unused // main is the entry point for the service.
+func main() {
 	// init & config
 	version.SetServiceName("aeneas")
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -80,8 +80,12 @@ func main() { //nolint:unused // main is the entry point for the service.
 	if err != nil {
 		logger.WithError(err).Panic("failed to create server")
 	}
+	// start everything
+	run(ctx, database, hc, srv, eng)
+}
 
-	// start service
+func run(ctx context.Context, database libdb.Database, hc health.Checker, srv transport.Server, eng *engine.Engine) {
+	logger := log.FromContext(ctx)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
