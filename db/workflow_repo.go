@@ -23,6 +23,7 @@ var ErrWorkflowNotFound = errors.New("workflow not found")
 // WorkflowRepository implements domain.WorkflowRepository using SQL
 type WorkflowRepository struct {
 	db     db.Database
+	ph     sq.PlaceholderFormat
 	tracer trace.Tracer
 	logger logrus.FieldLogger
 }
@@ -36,6 +37,7 @@ func NewWorkflowRepository(database db.Database, opts ...Option) *WorkflowReposi
 
 	return &WorkflowRepository{
 		db:     database,
+		ph:     getPlaceholderFormat(),
 		tracer: o.t,
 		logger: o.l,
 	}
@@ -76,7 +78,7 @@ func (r *WorkflowRepository) Create(ctx context.Context, workflow *domain.Workfl
 			workflow.CreatedAt,
 			workflow.UpdatedAt,
 		).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
@@ -106,7 +108,7 @@ func (r *WorkflowRepository) Get(ctx context.Context, id string) (*domain.Workfl
 	query := sq.Select("id", "name", "description", "steps", "status", "created_at", "updated_at").
 		From("workflows").
 		Where(sq.Eq{"id": parsedID.String()}).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
@@ -133,7 +135,7 @@ func (r *WorkflowRepository) List(ctx context.Context, opts domain.ListOptions) 
 
 	query := sq.Select("id", "name", "description", "steps", "status", "created_at", "updated_at").
 		From("workflows").
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	if opts.OrderBy != "" {
 		query = query.OrderBy(opts.OrderBy)
@@ -194,7 +196,7 @@ func (r *WorkflowRepository) Update(ctx context.Context, workflow *domain.Workfl
 		Set("status", string(workflow.Status)).
 		Set("updated_at", workflow.UpdatedAt).
 		Where(sq.Eq{"id": workflow.ID.String()}).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
