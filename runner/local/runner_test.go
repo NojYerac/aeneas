@@ -49,9 +49,9 @@ var _ = Describe("LocalRunner", func() {
 					TimeoutSeconds: 30,
 				}
 
-				result, err := runner.Execute(ctx, step)
-				Expect(err).NotTo(HaveOccurred())
+				result := runner.Execute(ctx, step)
 				Expect(result).NotTo(BeNil())
+				Expect(result.Error).NotTo(HaveOccurred())
 				Expect(result.ExitCode).To(Equal(0))
 				Expect(result.Logs).To(ContainSubstring("hello world"))
 			})
@@ -68,9 +68,9 @@ var _ = Describe("LocalRunner", func() {
 					TimeoutSeconds: 30,
 				}
 
-				result, err := runner.Execute(ctx, step)
-				Expect(err).NotTo(HaveOccurred())
+				result := runner.Execute(ctx, step)
 				Expect(result).NotTo(BeNil())
+				Expect(result.Error).NotTo(HaveOccurred())
 				Expect(result.ExitCode).To(Equal(42))
 			})
 		})
@@ -90,8 +90,9 @@ var _ = Describe("LocalRunner", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 
-				_, err := runner.Execute(ctx, step)
-				Expect(err).To(HaveOccurred())
+				result := runner.Execute(ctx, step)
+				Expect(result).NotTo(BeNil())
+				Expect(result.Error).To(HaveOccurred())
 			})
 		})
 
@@ -109,9 +110,9 @@ var _ = Describe("LocalRunner", func() {
 					},
 				}
 
-				result, err := runner.Execute(ctx, step)
-				Expect(err).ToNot(HaveOccurred())
+				result := runner.Execute(ctx, step)
 				Expect(result).ToNot(BeNil())
+				Expect(result.Error).ToNot(HaveOccurred())
 				Expect(result.Logs).To(ContainSubstring("test_value"))
 			})
 		})

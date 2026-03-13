@@ -10,6 +10,7 @@ import (
 	"github.com/nojyerac/aeneas/config"
 	"github.com/nojyerac/aeneas/db"
 	"github.com/nojyerac/aeneas/engine"
+	"github.com/nojyerac/aeneas/runner/local"
 	"github.com/nojyerac/aeneas/service"
 	"github.com/nojyerac/aeneas/transport/http"
 	"github.com/nojyerac/aeneas/transport/rpc"
@@ -59,7 +60,11 @@ func main() {
 	// services
 	workflowSvc := service.NewWorkflowService(workflowRepo)
 	executionSvc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-	eng := engine.New(workflowRepo, executionRepo, stepExecutionRepo, nil)
+	runnr, err := local.NewLocalRunner(logger)
+	if err != nil {
+		logger.WithError(err).Panic("failed to create local runner")
+	}
+	eng := engine.New(workflowRepo, executionRepo, stepExecutionRepo, runnr, engine.WithLogger(logger))
 
 	// transports
 	hSrv := libhttp.NewServer(
@@ -104,7 +109,7 @@ func run(ctx context.Context, database libdb.Database, hc health.Checker, srv tr
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		if err := hc.Start(ctx); err != nil {
+		if err := hc.Start(ctx); err != nil || err != context.Canceled {
 			logger.WithError(err).Panic("health checker error")
 		}
 	}()

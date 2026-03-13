@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nojyerac/aeneas/domain"
+	"github.com/nojyerac/aeneas/runner"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -20,7 +21,7 @@ type Engine struct {
 	workflowRepo      domain.WorkflowRepository
 	executionRepo     domain.ExecutionRepository
 	stepExecutionRepo domain.StepExecutionRepository
-	runner            Runner
+	runner            runner.Runner
 	opts              Options
 
 	mu      sync.Mutex
@@ -34,7 +35,7 @@ func New(
 	workflowRepo domain.WorkflowRepository,
 	executionRepo domain.ExecutionRepository,
 	stepExecutionRepo domain.StepExecutionRepository,
-	runner Runner,
+	runnr runner.Runner,
 	options ...Option,
 ) *Engine {
 	opts := defaultOptions()
@@ -46,7 +47,7 @@ func New(
 		workflowRepo:      workflowRepo,
 		executionRepo:     executionRepo,
 		stepExecutionRepo: stepExecutionRepo,
-		runner:            runner,
+		runner:            runnr,
 		opts:              opts,
 		stopCh:            make(chan struct{}),
 		doneCh:            make(chan struct{}),

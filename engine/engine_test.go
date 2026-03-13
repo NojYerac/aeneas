@@ -13,6 +13,7 @@ import (
 
 	"github.com/nojyerac/aeneas/domain"
 	"github.com/nojyerac/aeneas/engine"
+	"github.com/nojyerac/aeneas/runner"
 )
 
 var _ = Describe("Engine", func() {
@@ -22,7 +23,7 @@ var _ = Describe("Engine", func() {
 		workflowRepo      *mockWorkflowRepo
 		executionRepo     *mockExecutionRepo
 		stepExecutionRepo *mockStepExecutionRepo
-		runner            *mockRunner
+		run               *mockRunner
 		eng               *engine.Engine
 		testWorkflow      *domain.Workflow
 		testExecution     *domain.Execution
@@ -33,7 +34,7 @@ var _ = Describe("Engine", func() {
 		workflowRepo = newMockWorkflowRepo()
 		executionRepo = newMockExecutionRepo()
 		stepExecutionRepo = newMockStepExecutionRepo()
-		runner = newMockRunner()
+		run = newMockRunner()
 
 		// Create test workflow with 3 steps
 		testWorkflow = &domain.Workflow{
@@ -63,7 +64,7 @@ var _ = Describe("Engine", func() {
 			workflowRepo,
 			executionRepo,
 			stepExecutionRepo,
-			runner,
+			run,
 			engine.WithPollInterval(50*time.Millisecond),
 			engine.WithLogger(logger),
 		)
@@ -104,7 +105,7 @@ var _ = Describe("Engine", func() {
 		Context("when all steps succeed", func() {
 			BeforeEach(func() {
 				// Configure runner to return success for all steps
-				runner.results = map[string]engine.RunResult{
+				run.results = map[string]*runner.Result{
 					"step1": {ExitCode: 0},
 					"step2": {ExitCode: 0},
 					"step3": {ExitCode: 0},
@@ -150,7 +151,7 @@ var _ = Describe("Engine", func() {
 		Context("when a step fails", func() {
 			BeforeEach(func() {
 				// Configure runner: step1 succeeds, step2 fails
-				runner.results = map[string]engine.RunResult{
+				run.results = map[string]*runner.Result{
 					"step1": {ExitCode: 0},
 					"step2": {ExitCode: 1, Error: fmt.Errorf("step failed")},
 					"step3": {ExitCode: 0},
@@ -204,8 +205,8 @@ var _ = Describe("Engine", func() {
 		Context("when execution is canceled", func() {
 			BeforeEach(func() {
 				// Configure runner with delay to allow cancellation
-				runner.delay = 100 * time.Millisecond
-				runner.results = map[string]engine.RunResult{
+				run.delay = 100 * time.Millisecond
+				run.results = map[string]*runner.Result{
 					"step1": {ExitCode: 0},
 					"step2": {ExitCode: 0},
 					"step3": {ExitCode: 0},
@@ -288,8 +289,8 @@ var _ = Describe("Engine", func() {
 			executionRepo.mu.Unlock()
 
 			// Configure runner with delay to verify serial processing
-			runner.delay = 100 * time.Millisecond
-			runner.results = map[string]engine.RunResult{
+			run.delay = 100 * time.Millisecond
+			run.results = map[string]*runner.Result{
 				"step1": {ExitCode: 0},
 				"step2": {ExitCode: 0},
 				"step3": {ExitCode: 0},
@@ -519,25 +520,27 @@ func (m *mockStepExecutionRepo) UpdateStatus(
 	return fmt.Errorf("step execution not found")
 }
 
+var _ runner.Runner = (*mockRunner)(nil)
+
 type mockRunner struct {
-	results map[string]engine.RunResult
+	results map[string]*runner.Result
 	delay   time.Duration
 }
 
 func newMockRunner() *mockRunner {
 	return &mockRunner{
-		results: make(map[string]engine.RunResult),
+		results: make(map[string]*runner.Result),
 	}
 }
 
-func (m *mockRunner) Execute(ctx context.Context, step *domain.StepDefinition) engine.RunResult {
+func (m *mockRunner) Execute(ctx context.Context, step *domain.StepDefinition) *runner.Result {
 	if m.delay > 0 {
 		time.Sleep(m.delay)
 	}
 
 	result, ok := m.results[step.Name]
 	if !ok {
-		return engine.RunResult{ExitCode: 0}
+		return &runner.Result{ExitCode: 0}
 	}
 
 	return result
