@@ -36,7 +36,10 @@ func NewWorkflowService(svc *service.WorkflowService, opts ...Option) *WorkflowS
 	}
 }
 
-func (s *WorkflowService) ActivateWorkflow(parentCtx context.Context, req *pb.ActivateWorkflowRequest) (*pb.WorkflowResponse, error) {
+func (s *WorkflowService) ActivateWorkflow(
+	parentCtx context.Context,
+	req *pb.ActivateWorkflowRequest,
+) (*pb.WorkflowResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.WorkflowService.ActivateWorkflow")
 	defer span.End()
 	workflow, err := s.svc.Activate(ctx, req.GetWorkflowId())
@@ -50,7 +53,10 @@ func (s *WorkflowService) ActivateWorkflow(parentCtx context.Context, req *pb.Ac
 	return wf, nil
 }
 
-func (s *WorkflowService) ArchiveWorkflow(parentCtx context.Context, req *pb.ArchiveWorkflowRequest) (*pb.WorkflowResponse, error) {
+func (s *WorkflowService) ArchiveWorkflow(
+	parentCtx context.Context,
+	req *pb.ArchiveWorkflowRequest,
+) (*pb.WorkflowResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.WorkflowService.ArchiveWorkflow")
 	defer span.End()
 	workflow, err := s.svc.Archive(ctx, req.GetWorkflowId())
@@ -64,7 +70,10 @@ func (s *WorkflowService) ArchiveWorkflow(parentCtx context.Context, req *pb.Arc
 	return wf, nil
 }
 
-func (s *WorkflowService) CreateWorkflow(parentCtx context.Context, req *pb.CreateWorkflowRequest) (*pb.CreateWorkflowResponse, error) {
+func (s *WorkflowService) CreateWorkflow(
+	parentCtx context.Context,
+	req *pb.CreateWorkflowRequest,
+) (*pb.CreateWorkflowResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.WorkflowService.CreateWorkflow")
 	defer span.End()
 	workflow, err := s.svc.Create(ctx, service.CreateWorkflowInput{
@@ -78,7 +87,10 @@ func (s *WorkflowService) CreateWorkflow(parentCtx context.Context, req *pb.Crea
 	return &pb.CreateWorkflowResponse{WorkflowId: workflow.ID.String()}, nil
 }
 
-func (s *WorkflowService) GetWorkflow(parentCtx context.Context, req *pb.GetWorkflowByIdRequest) (*pb.WorkflowResponse, error) {
+func (s *WorkflowService) GetWorkflow(
+	parentCtx context.Context,
+	req *pb.GetWorkflowByIdRequest,
+) (*pb.WorkflowResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.WorkflowService.GetWorkflow")
 	defer span.End()
 	workflow, err := s.svc.Get(ctx, req.GetWorkflowId())
@@ -95,7 +107,10 @@ func (s *WorkflowService) GetWorkflow(parentCtx context.Context, req *pb.GetWork
 	return wf, nil
 }
 
-func (s *WorkflowService) ListWorkflows(parentCtx context.Context, req *pb.ListWorkflowsRequest) (*pb.ListWorkflowsResponse, error) {
+func (s *WorkflowService) ListWorkflows(
+	parentCtx context.Context,
+	req *pb.ListWorkflowsRequest,
+) (*pb.ListWorkflowsResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.WorkflowService.ListWorkflows")
 	defer span.End()
 	workflows, err := s.svc.List(ctx, int(req.GetLimit()), int(req.GetOffset()))
@@ -115,7 +130,10 @@ func (s *WorkflowService) ListWorkflows(parentCtx context.Context, req *pb.ListW
 	}, nil
 }
 
-func (s *WorkflowService) UpdateWorkflow(parentCtx context.Context, req *pb.UpdateWorkflowRequest) (*pb.WorkflowResponse, error) {
+func (s *WorkflowService) UpdateWorkflow(
+	parentCtx context.Context,
+	req *pb.UpdateWorkflowRequest,
+) (*pb.WorkflowResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.WorkflowService.UpdateWorkflow")
 	defer span.End()
 	input := service.UpdateWorkflowInput{

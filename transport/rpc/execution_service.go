@@ -37,7 +37,10 @@ func NewExecutionService(svc *service.ExecutionService, opts ...Option) *Executi
 	}
 }
 
-func (s *ExecutionService) GetExecution(parentCtx context.Context, req *pb.GetExecutionRequest) (*pb.ExecutionResponse, error) {
+func (s *ExecutionService) GetExecution(
+	parentCtx context.Context,
+	req *pb.GetExecutionRequest,
+) (*pb.ExecutionResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.ExecutionService.GetExecution")
 	defer span.End()
 	execution, steps, err := s.svc.GetWithSteps(ctx, req.GetExecutionId())
@@ -51,7 +54,10 @@ func (s *ExecutionService) GetExecution(parentCtx context.Context, req *pb.GetEx
 	return ex, nil
 }
 
-func (s *ExecutionService) CancelExecution(parentCtx context.Context, req *pb.CancelExecutionRequest) (*pb.CancelExecutionResponse, error) {
+func (s *ExecutionService) CancelExecution(
+	parentCtx context.Context,
+	req *pb.CancelExecutionRequest,
+) (*pb.CancelExecutionResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.ExecutionService.CancelExecution")
 	defer span.End()
 	err := s.svc.Cancel(ctx, req.GetExecutionId())
@@ -61,7 +67,10 @@ func (s *ExecutionService) CancelExecution(parentCtx context.Context, req *pb.Ca
 	return &pb.CancelExecutionResponse{}, nil
 }
 
-func (s *ExecutionService) ExecuteWorkflow(parentCtx context.Context, req *pb.ExecuteWorkflowRequest) (*pb.ExecutionResponse, error) {
+func (s *ExecutionService) ExecuteWorkflow(
+	parentCtx context.Context,
+	req *pb.ExecuteWorkflowRequest,
+) (*pb.ExecutionResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.ExecutionService.ExecuteWorkflow")
 	defer span.End()
 	execution, err := s.svc.Trigger(ctx, req.GetWorkflowId())
@@ -71,7 +80,10 @@ func (s *ExecutionService) ExecuteWorkflow(parentCtx context.Context, req *pb.Ex
 	return toPbExecution(execution, nil)
 }
 
-func (s *ExecutionService) ListWorkflowExecutions(parentCtx context.Context, req *pb.ListWorkflowExecutionsRequest) (*pb.ListWorkflowExecutionsResponse, error) {
+func (s *ExecutionService) ListWorkflowExecutions(
+	parentCtx context.Context,
+	req *pb.ListWorkflowExecutionsRequest,
+) (*pb.ListWorkflowExecutionsResponse, error) {
 	ctx, span := s.t.Start(parentCtx, "rpc.ExecutionService.ListWorkflowExecutions")
 	defer span.End()
 	executions, err := s.svc.ListByWorkflow(ctx, req.GetWorkflowId(), int(req.GetLimit()), int(req.GetOffset()))
@@ -177,7 +189,8 @@ func toPbExecutionStatus(st domain.ExecutionStatus) (pb.ExecutionStatus, error) 
 	case domain.ExecutionCanceled:
 		return pb.ExecutionStatus_EXECUTION_STATUS_CANCELED, nil
 	default:
-		return pb.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED, status.Error(codes.InvalidArgument, "unknown execution status")
+		return pb.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED,
+			status.Error(codes.InvalidArgument, "unknown execution status")
 	}
 }
 
@@ -190,14 +203,14 @@ func toPbExecution(execution *domain.Execution, steps []*domain.StepExecution) (
 		}
 		pbSteps = append(pbSteps, pbStep)
 	}
-	status, err := toPbExecutionStatus(execution.Status)
+	pbStatus, err := toPbExecutionStatus(execution.Status)
 	if err != nil {
 		return nil, err
 	}
 	pbEx := &pb.ExecutionResponse{
 		Id:         execution.ID.String(),
 		WorkflowId: execution.WorkflowID.String(),
-		Status:     status,
+		Status:     pbStatus,
 		Steps:      pbSteps,
 	}
 	if execution.Error != "" {

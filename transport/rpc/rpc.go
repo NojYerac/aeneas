@@ -11,7 +11,11 @@ import (
 )
 
 // RegisterServices registers all gRPC services with the server
-func RegisterServices(wfSvc *service.WorkflowService, execSrv *service.ExecutionService, o ...Option) func(s *grpc.Server) {
+func RegisterServices(
+	wfSvc *service.WorkflowService,
+	execSrv *service.ExecutionService,
+	o ...Option,
+) func(s *grpc.Server) {
 	return func(s *grpc.Server) {
 		// Repository-based services will be registered here
 		wf := NewWorkflowService(wfSvc, o...)
