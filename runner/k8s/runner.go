@@ -112,7 +112,7 @@ func NewK8sRunnerForTest(
 }
 
 // Execute runs a workflow step as a Kubernetes Job
-func (r *K8sRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*runner.Result, error) {
+func (r *K8sRunner) Execute(ctx context.Context, step *domain.StepDefinition) *runner.Result {
 	// Generate a unique execution ID for the job
 	executionID := uuid.New().String()
 
@@ -132,7 +132,9 @@ func (r *K8sRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*
 
 	createdJob, err := r.client.BatchV1().Jobs(r.namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create job: %w", err)
+		return &runner.Result{
+			Error: fmt.Errorf("failed to create job: %w", err),
+		}
 	}
 
 	// Defer cleanup of the job
@@ -141,7 +143,9 @@ func (r *K8sRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*
 	// Watch the Job until completion
 	exitCode, err := r.watchJobCompletion(ctx, createdJob)
 	if err != nil {
-		return nil, fmt.Errorf("failed to watch job completion: %w", err)
+		return &runner.Result{
+			Error: fmt.Errorf("failed to watch job completion: %w", err),
+		}
 	}
 
 	// Get the Pod associated with the Job to retrieve logs
@@ -151,7 +155,7 @@ func (r *K8sRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*
 		return &runner.Result{
 			ExitCode: exitCode,
 			Logs:     fmt.Sprintf("(failed to retrieve logs: %v)", err),
-		}, nil
+		}
 	}
 
 	// Retrieve Pod logs
@@ -164,7 +168,7 @@ func (r *K8sRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*
 	return &runner.Result{
 		ExitCode: exitCode,
 		Logs:     logs,
-	}, nil
+	}
 }
 
 // generateJobName creates a DNS-compliant job name

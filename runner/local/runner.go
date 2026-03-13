@@ -36,7 +36,7 @@ func NewLocalRunner(logger logrus.FieldLogger) (*LocalRunner, error) {
 }
 
 // Execute runs a workflow step in a Docker container
-func (r *LocalRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*runner.Result, error) {
+func (r *LocalRunner) Execute(ctx context.Context, step *domain.StepDefinition) *runner.Result {
 	// Set timeout if specified
 	if step.TimeoutSeconds > 0 {
 		var cancel context.CancelFunc
@@ -46,7 +46,9 @@ func (r *LocalRunner) Execute(ctx context.Context, step *domain.StepDefinition) 
 
 	// Pull image if not present
 	if err := r.ensureImage(ctx, step.Image); err != nil {
-		return nil, err
+		return &runner.Result{
+			Error: fmt.Errorf("failed to ensure image %s: %w", step.Image, err),
+		}
 	}
 
 	// Prepare container configuration
@@ -59,7 +61,9 @@ func (r *LocalRunner) Execute(ctx context.Context, step *domain.StepDefinition) 
 	// Create container
 	resp, err := r.client.ContainerCreate(ctx, config, nil, nil, nil, "")
 	if err != nil {
-		return nil, err
+		return &runner.Result{
+			Error: fmt.Errorf("failed to create container: %w", err),
+		}
 	}
 	containerID := resp.ID
 
@@ -74,7 +78,9 @@ func (r *LocalRunner) Execute(ctx context.Context, step *domain.StepDefinition) 
 
 	// Start container
 	if err := r.client.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
-		return nil, err
+		return &runner.Result{
+			Error: fmt.Errorf("failed to start container: %w", err),
+		}
 	}
 
 	// Wait for container to finish
@@ -82,7 +88,9 @@ func (r *LocalRunner) Execute(ctx context.Context, step *domain.StepDefinition) 
 	select {
 	case err := <-errCh:
 		if err != nil {
-			return nil, fmt.Errorf("error waiting for container: %w", err)
+			return &runner.Result{
+				Error: fmt.Errorf("error waiting for container: %w", err),
+			}
 		}
 	case status := <-statusCh:
 		// Get container logs
@@ -95,10 +103,12 @@ func (r *LocalRunner) Execute(ctx context.Context, step *domain.StepDefinition) 
 		return &runner.Result{
 			ExitCode: int(status.StatusCode),
 			Logs:     logs,
-		}, nil
+		}
 	}
 
-	return nil, ctx.Err()
+	return &runner.Result{
+		Error: ctx.Err(),
+	}
 }
 
 // ensureImage pulls the image if it's not already present locally
