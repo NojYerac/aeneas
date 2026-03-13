@@ -112,7 +112,10 @@ func (e *Engine) pollLoop(ctx context.Context) {
 }
 
 // processPendingExecutions finds and processes all pending executions
-func (e *Engine) processPendingExecutions(ctx context.Context) {
+func (e *Engine) processPendingExecutions(parentCtx context.Context) {
+	ctx, span := e.opts.Tracer.Start(parentCtx, "engine.processPendingExecutions")
+	defer span.End()
+
 	// For now, we query all workflows and check for pending executions
 	// A more efficient approach would be to have a dedicated query for pending executions
 	workflows, err := e.workflowRepo.List(ctx, domain.ListOptions{Limit: 100})

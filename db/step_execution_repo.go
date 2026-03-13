@@ -21,6 +21,7 @@ var ErrStepExecutionNotFound = errors.New("step execution not found")
 // StepExecutionRepository implements domain.StepExecutionRepository using SQL
 type StepExecutionRepository struct {
 	db     db.Database
+	ph     sq.PlaceholderFormat
 	tracer trace.Tracer
 	logger logrus.FieldLogger
 }
@@ -34,6 +35,7 @@ func NewStepExecutionRepository(database db.Database, opts ...Option) *StepExecu
 
 	return &StepExecutionRepository{
 		db:     database,
+		ph:     getPlaceholderFormat(),
 		tracer: o.t,
 		logger: o.l,
 	}
@@ -68,7 +70,7 @@ func (r *StepExecutionRepository) Create(ctx context.Context, stepExecution *dom
 			stepExecution.ExitCode,
 			stepExecution.Error,
 		).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
@@ -102,7 +104,7 @@ func (r *StepExecutionRepository) ListByExecution(
 		From("step_executions").
 		Where(sq.Eq{"execution_id": parsedExecutionID.String()}).
 		OrderBy("created_at ASC").
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
@@ -148,7 +150,7 @@ func (r *StepExecutionRepository) UpdateStatus(
 	query := sq.Update("step_executions").
 		Set("status", string(status)).
 		Where(sq.Eq{"id": parsedID.String()}).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	if exitCode != nil {
 		query = query.Set("exit_code", *exitCode)

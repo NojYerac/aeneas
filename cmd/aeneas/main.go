@@ -1,4 +1,4 @@
-package aeneas
+package main
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/nojyerac/aeneas/config"
 	"github.com/nojyerac/aeneas/db"
+	"github.com/nojyerac/aeneas/engine"
 	"github.com/nojyerac/aeneas/service"
 	"github.com/nojyerac/aeneas/transport/http"
 	"github.com/nojyerac/aeneas/transport/rpc"
@@ -23,9 +24,8 @@ import (
 	"github.com/nojyerac/go-lib/version"
 )
 
-func main() { //nolint:unused // main is the entry point for the service.
+func main() {
 	// init & config
-	version.SetSemVer("0.0.0")
 	version.SetServiceName("aeneas")
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
@@ -59,6 +59,7 @@ func main() { //nolint:unused // main is the entry point for the service.
 	// services
 	workflowSvc := service.NewWorkflowService(workflowRepo)
 	executionSvc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
+	eng := engine.New(workflowRepo, executionRepo, stepExecutionRepo, nil)
 
 	// transports
 	hSrv := libhttp.NewServer(
@@ -79,8 +80,12 @@ func main() { //nolint:unused // main is the entry point for the service.
 	if err != nil {
 		logger.WithError(err).Panic("failed to create server")
 	}
+	// start everything
+	run(ctx, database, hc, srv, eng)
+}
 
-	// start service
+func run(ctx context.Context, database libdb.Database, hc health.Checker, srv transport.Server, eng *engine.Engine) {
+	logger := log.FromContext(ctx)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
@@ -103,9 +108,13 @@ func main() { //nolint:unused // main is the entry point for the service.
 			logger.WithError(err).Panic("health checker error")
 		}
 	}()
+	if err := eng.Start(ctx); err != nil && err != context.Canceled {
+		logger.WithError(err).Panic("engine error")
+	}
 
 	logger.Info("Service starting")
 	<-ctx.Done()
+	_ = eng.Stop()
 	logger.Info("Service stopping")
 	wg.Wait()
 	logger.Info("Service stopped")

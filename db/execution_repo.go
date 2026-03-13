@@ -22,6 +22,7 @@ var ErrExecutionNotFound = errors.New("execution not found")
 // ExecutionRepository implements domain.ExecutionRepository using SQL
 type ExecutionRepository struct {
 	db     db.Database
+	ph     sq.PlaceholderFormat
 	tracer trace.Tracer
 	logger logrus.FieldLogger
 }
@@ -35,6 +36,7 @@ func NewExecutionRepository(database db.Database, opts ...Option) *ExecutionRepo
 
 	return &ExecutionRepository{
 		db:     database,
+		ph:     getPlaceholderFormat(),
 		tracer: o.t,
 		logger: o.l,
 	}
@@ -65,7 +67,7 @@ func (r *ExecutionRepository) Create(ctx context.Context, execution *domain.Exec
 			execution.FinishedAt,
 			execution.Error,
 		).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
@@ -95,7 +97,7 @@ func (r *ExecutionRepository) Get(ctx context.Context, id string) (*domain.Execu
 	query := sq.Select("id", "workflow_id", "status", "started_at", "finished_at", "error").
 		From("executions").
 		Where(sq.Eq{"id": parsedID.String()}).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
@@ -133,7 +135,7 @@ func (r *ExecutionRepository) ListByWorkflow(
 	query := sq.Select("id", "workflow_id", "status", "started_at", "finished_at", "error").
 		From("executions").
 		Where(sq.Eq{"workflow_id": parsedWorkflowID.String()}).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	if opts.OrderBy != "" {
 		query = query.OrderBy(opts.OrderBy)
@@ -185,7 +187,7 @@ func (r *ExecutionRepository) Update(ctx context.Context, execution *domain.Exec
 		Set("finished_at", execution.FinishedAt).
 		Set("error", execution.Error).
 		Where(sq.Eq{"id": execution.ID.String()}).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
@@ -225,7 +227,7 @@ func (r *ExecutionRepository) UpdateStatus(ctx context.Context, id string, statu
 	query := sq.Update("executions").
 		Set("status", string(status)).
 		Where(sq.Eq{"id": parsedID.String()}).
-		PlaceholderFormat(sq.Dollar)
+		PlaceholderFormat(r.ph)
 
 	querySQL, args, err := query.ToSql()
 	if err != nil {
