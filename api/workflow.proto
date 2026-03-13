@@ -1,0 +1,180 @@
+syntax = "proto3";
+
+package workflow;
+
+option go_package = "pb/workflow";
+
+import "google/protobuf/timestamp.proto";
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum WorkflowStatus {
+  WORKFLOW_STATUS_UNSPECIFIED = 0;
+  WORKFLOW_STATUS_INACTIVE    = 1;
+  WORKFLOW_STATUS_ACTIVE      = 2;
+  WORKFLOW_STATUS_ARCHIVED    = 3;
+}
+
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_PENDING     = 1;
+  EXECUTION_STATUS_RUNNING     = 2;
+  EXECUTION_STATUS_SUCCEEDED   = 3;
+  EXECUTION_STATUS_FAILED      = 4;
+  EXECUTION_STATUS_CANCELED    = 5;
+}
+
+enum StepExecutionStatus {
+  STEP_EXECUTION_STATUS_UNSPECIFIED = 0;
+  STEP_EXECUTION_STATUS_PENDING     = 1;
+  STEP_EXECUTION_STATUS_RUNNING     = 2;
+  STEP_EXECUTION_STATUS_SUCCEEDED   = 3;
+  STEP_EXECUTION_STATUS_FAILED      = 4;
+  STEP_EXECUTION_STATUS_SKIPPED     = 5;
+}
+
+// ---------------------------------------------------------------------------
+// Shared domain messages
+// ---------------------------------------------------------------------------
+
+message StepDefinition {
+  string            name            = 1;
+  string            image           = 2;
+  repeated string   command         = 3;
+  repeated string   args            = 4;
+  map<string,string> env            = 5;
+  optional int32    timeout_seconds = 6;
+}
+
+message WorkflowResponse {
+  string                    id          = 1;
+  string                    name        = 2;
+  string                    description = 3;
+  repeated StepDefinition   steps       = 4;
+  WorkflowStatus            status      = 5;
+  google.protobuf.Timestamp created_at  = 6;
+  google.protobuf.Timestamp updated_at  = 7;
+}
+
+message StepExecutionResponse {
+  string                     id          = 1;
+  string                     step_name   = 2;
+  StepExecutionStatus        status      = 3;
+  google.protobuf.Timestamp  started_at  = 4;
+  google.protobuf.Timestamp  finished_at = 5;
+  optional int32             exit_code   = 6;
+  optional string            error       = 7;
+}
+
+message ExecutionResponse {
+  string                         id          = 1;
+  string                         workflow_id = 2;
+  ExecutionStatus                status      = 3;
+  google.protobuf.Timestamp      started_at  = 4;
+  google.protobuf.Timestamp      finished_at = 5;
+  optional string                error       = 6;
+  repeated StepExecutionResponse steps       = 7;
+}
+
+// ---------------------------------------------------------------------------
+// Workflow RPC messages
+// ---------------------------------------------------------------------------
+
+message ListWorkflowsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message ListWorkflowsResponse {
+  repeated WorkflowResponse workflows = 1;
+}
+
+message CreateWorkflowRequest {
+  string                  name        = 1;
+  optional string         description = 2;
+  repeated StepDefinition steps       = 3;
+}
+
+message CreateWorkflowResponse {
+  string workflow_id = 1;
+}
+
+message GetWorkflowByIdRequest {
+  string workflow_id = 1;
+}
+
+message UpdateWorkflowRequest {
+  string                  workflow_id = 1;
+  optional string         name        = 2;
+  optional string         description = 3;
+  repeated StepDefinition steps       = 4;
+}
+
+message ActivateWorkflowRequest {
+  string workflow_id = 1;
+}
+
+message ArchiveWorkflowRequest {
+  string workflow_id = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Execution RPC messages
+// ---------------------------------------------------------------------------
+
+message ExecuteWorkflowRequest {
+  string workflow_id = 1;
+}
+
+message ListWorkflowExecutionsRequest {
+  string workflow_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListWorkflowExecutionsResponse {
+  repeated ExecutionResponse executions = 1;
+}
+
+message GetExecutionRequest {
+  string execution_id = 1;
+}
+
+message CancelExecutionRequest {
+  string execution_id = 1;
+}
+
+message CancelExecutionResponse {}
+
+// ---------------------------------------------------------------------------
+// Services
+// ---------------------------------------------------------------------------
+
+service WorkflowService {
+  // GET  /api/v1/workflows
+  rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
+  // POST /api/v1/workflows
+  rpc CreateWorkflow(CreateWorkflowRequest) returns (CreateWorkflowResponse);
+  // GET  /api/v1/workflows/{workflow_id}
+  rpc GetWorkflow(GetWorkflowByIdRequest) returns (WorkflowResponse);
+  // PUT  /api/v1/workflows/{workflow_id}
+  rpc UpdateWorkflow(UpdateWorkflowRequest) returns (WorkflowResponse);
+  // POST /api/v1/workflows/{workflow_id}/activate
+  rpc ActivateWorkflow(ActivateWorkflowRequest) returns (WorkflowResponse);
+  // POST /api/v1/workflows/{workflow_id}/archive
+  rpc ArchiveWorkflow(ArchiveWorkflowRequest) returns (WorkflowResponse);
+}
+
+service ExecutionService {
+  // GET  /api/v1/executions/{execution_id}
+  rpc GetExecution(GetExecutionRequest) returns (ExecutionResponse);
+  // POST /api/v1/executions/{execution_id}/cancel
+  rpc CancelExecution(CancelExecutionRequest) returns (CancelExecutionResponse);
+    // POST /api/v1/workflows/{workflow_id}/executions
+  rpc ExecuteWorkflow(ExecuteWorkflowRequest) returns (ExecutionResponse);
+  // GET  /api/v1/workflows/{workflow_id}/executions
+  rpc ListWorkflowExecutions(ListWorkflowExecutionsRequest) returns (ListWorkflowExecutionsResponse);
+}
+

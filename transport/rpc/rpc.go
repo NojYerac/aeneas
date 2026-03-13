@@ -1,6 +1,9 @@
 package rpc
 
 import (
+	pb "github.com/nojyerac/aeneas/pb/workflow"
+	"github.com/nojyerac/aeneas/service"
+	"github.com/nojyerac/go-lib/log"
 	"github.com/nojyerac/go-lib/tracing"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
@@ -8,9 +11,17 @@ import (
 )
 
 // RegisterServices registers all gRPC services with the server
-func RegisterServices(o ...Option) func(s *grpc.Server) {
+func RegisterServices(
+	wfSvc *service.WorkflowService,
+	execSrv *service.ExecutionService,
+	o ...Option,
+) func(s *grpc.Server) {
 	return func(s *grpc.Server) {
 		// Repository-based services will be registered here
+		wf := NewWorkflowService(wfSvc, o...)
+		ex := NewExecutionService(execSrv, o...)
+		pb.RegisterWorkflowServiceServer(s, wf)
+		pb.RegisterExecutionServiceServer(s, ex)
 	}
 }
 
@@ -37,6 +48,6 @@ func WithLogger(l logrus.FieldLogger) Option {
 func defaultOptions() *options {
 	return &options{
 		t: tracing.TracerForPackage(),
-		l: logrus.New(),
+		l: log.Nop(),
 	}
 }
