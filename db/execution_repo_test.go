@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/nojyerac/aeneas/data/db"
+	"github.com/nojyerac/aeneas/db"
 	"github.com/nojyerac/aeneas/domain"
 	golib "github.com/nojyerac/go-lib/db"
 )

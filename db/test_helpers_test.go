@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	migrationsPath = "../../migrations"
+	migrationsPath = "../migrations"
 	upSQLSuffix    = ".up.sql"
 )
 

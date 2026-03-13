@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/nojyerac/aeneas/config"
-	"github.com/nojyerac/aeneas/data/db"
+	"github.com/nojyerac/aeneas/db"
 	"github.com/nojyerac/aeneas/service"
 	"github.com/nojyerac/aeneas/transport/http"
 	"github.com/nojyerac/aeneas/transport/rpc"

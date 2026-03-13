@@ -19,11 +19,11 @@ var _ runner.Runner = (*LocalRunner)(nil)
 // LocalRunner executes workflow steps using Docker containers on the local machine
 type LocalRunner struct {
 	client *client.Client
-	logger *logrus.Logger
+	logger logrus.FieldLogger
 }
 
 // NewLocalRunner creates a new LocalRunner instance
-func NewLocalRunner(logger *logrus.Logger) (*LocalRunner, error) {
+func NewLocalRunner(logger logrus.FieldLogger) (*LocalRunner, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create docker client: %w", err)

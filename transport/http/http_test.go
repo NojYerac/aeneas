@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -12,418 +11,464 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/nojyerac/aeneas/domain"
+	mockrepo "github.com/nojyerac/aeneas/mocks/domain"
 	"github.com/nojyerac/aeneas/service"
 	transporthttp "github.com/nojyerac/aeneas/transport/http"
+	"github.com/nojyerac/go-lib/log"
 	libhttp "github.com/nojyerac/go-lib/transport/http"
 )
+
+var ctxMatcher = mock.MatchedBy(func(arg any) bool {
+	_, ok := arg.(context.Context)
+	return ok
+})
 
 var _ = Describe("HTTP Handlers", func() {
 	var (
 		server       libhttp.Server
 		workflowSvc  *service.WorkflowService
 		executionSvc *service.ExecutionService
-		workflowRepo *mockWorkflowRepo
-		execRepo     *mockExecutionRepo
-		stepExecRepo *mockStepExecutionRepo
+		workflowRepo *mockrepo.MockWorkflowRepository
+		execRepo     *mockrepo.MockExecutionRepository
+		stepExecRepo *mockrepo.MockStepExecutionRepository
+		r            *http.Request
+		w            *httptest.ResponseRecorder
 	)
 
 	BeforeEach(func() {
-		workflowRepo = newMockWorkflowRepo()
-		execRepo = newMockExecutionRepo()
-		stepExecRepo = newMockStepExecutionRepo()
+		workflowRepo = new(mockrepo.MockWorkflowRepository)
+		execRepo = new(mockrepo.MockExecutionRepository)
+		stepExecRepo = new(mockrepo.MockStepExecutionRepository)
 
 		workflowSvc = service.NewWorkflowService(workflowRepo)
 		executionSvc = service.NewExecutionService(workflowRepo, execRepo, stepExecRepo)
 
 		config := &libhttp.Configuration{}
-		server = libhttp.NewServer(config)
+		server = libhttp.NewServer(
+			config,
+			libhttp.WithLogger(log.NewLogger(log.TestConfig)),
+		)
 		transporthttp.RegisterRoutes(server, workflowSvc, executionSvc)
+		w = httptest.NewRecorder()
+	})
+
+	AfterEach(func() {
+		workflowRepo.AssertExpectations(GinkgoT())
+		execRepo.AssertExpectations(GinkgoT())
+		stepExecRepo.AssertExpectations(GinkgoT())
+	})
+
+	JustBeforeEach(func() {
+		server.ServeHTTP(w, r)
 	})
 
 	Describe("POST /api/v1/workflows", func() {
-		It("creates a new workflow", func() {
-			reqBody := map[string]interface{}{
-				"name":        "Test Workflow",
-				"description": "A test workflow",
-				"steps": []map[string]interface{}{
-					{
-						"name":            "step1",
-						"image":           "alpine",
-						"command":         []string{"echo"},
-						"args":            []string{"hello"},
-						"env":             map[string]string{"KEY": "value"},
-						"timeout_seconds": 30,
+		When("input is valid", func() {
+			BeforeEach(func() {
+				workflowRepo.On(
+					"Create",
+					ctxMatcher,
+					mock.AnythingOfType("*domain.Workflow"),
+				).Return(nil).Once()
+				reqBody := map[string]interface{}{
+					"name":        "Test Workflow",
+					"description": "A test workflow",
+					"steps": []map[string]interface{}{
+						{
+							"name":            "step1",
+							"image":           "alpine",
+							"command":         []string{"echo"},
+							"args":            []string{"hello"},
+							"env":             map[string]string{"KEY": "value"},
+							"timeout_seconds": 30,
+						},
 					},
-				},
-			}
-			body, _ := json.Marshal(reqBody)
+				}
+				body, err := json.Marshal(reqBody)
+				Expect(err).NotTo(HaveOccurred())
 
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows", bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
+				r = httptest.NewRequest(http.MethodPost, "/api/v1/workflows", bytes.NewReader(body))
+				r.Header.Set("Content-Type", "application/json")
+			})
 
-			server.ServeHTTP(w, req)
+			It("creates a new workflow", func() {
+				Expect(w.Code).To(Equal(http.StatusCreated))
 
-			Expect(w.Code).To(Equal(http.StatusCreated))
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
 
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["name"]).To(Equal("Test Workflow"))
-			Expect(resp["description"]).To(Equal("A test workflow"))
-			Expect(resp["status"]).To(Equal("draft"))
-			Expect(resp["id"]).NotTo(BeEmpty())
+				Expect(resp["name"]).To(Equal("Test Workflow"))
+				Expect(resp["description"]).To(Equal("A test workflow"))
+				Expect(resp["status"]).To(Equal("draft"))
+				Expect(resp["id"]).NotTo(BeEmpty())
+			})
 		})
 
-		It("returns validation error for invalid input", func() {
-			reqBody := map[string]interface{}{
-				"name": "", // Invalid: empty name
-			}
-			body, _ := json.Marshal(reqBody)
+		When("input is invalid", func() {
+			BeforeEach(func() {
+				reqBody := map[string]any{
+					"name":  "", // Invalid: empty name
+					"steps": []map[string]any{},
+				}
+				body, err := json.Marshal(reqBody)
+				Expect(err).NotTo(HaveOccurred())
 
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows", bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
+				r = httptest.NewRequest(http.MethodPost, "/api/v1/workflows", bytes.NewReader(body))
+				r.Header.Set("Content-Type", "application/json")
+			})
+			It("returns validation error for invalid input", func() {
+				Expect(w.Code).To(Equal(http.StatusUnprocessableEntity))
 
-			server.ServeHTTP(w, req)
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
 
-			Expect(w.Code).To(Equal(http.StatusUnprocessableEntity))
-
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["code"]).To(Equal("VALIDATION_ERROR"))
+				Expect(resp["code"]).To(Equal("VALIDATION_ERROR"))
+			})
 		})
 	})
-
 	Describe("GET /api/v1/workflows", func() {
-		BeforeEach(func() {
-			// Seed some workflows
-			for i := 0; i < 5; i++ {
+		When("no query params are provided", func() {
+			BeforeEach(func() {
+				expectedListOpts := domain.ListOptions{
+					Limit:   10,
+					Offset:  0,
+					OrderBy: "created_at DESC",
+				}
+				workflowRepo.On("List", ctxMatcher, expectedListOpts).Return([]*domain.Workflow{
+					{ID: uuid.New(), Name: "Workflow 1", Status: domain.WorkflowActive},
+					{ID: uuid.New(), Name: "Workflow 2", Status: domain.WorkflowDraft},
+					{ID: uuid.New(), Name: "Workflow 3", Status: domain.WorkflowArchived},
+					{ID: uuid.New(), Name: "Workflow 4", Status: domain.WorkflowActive},
+					{ID: uuid.New(), Name: "Workflow 5", Status: domain.WorkflowDraft},
+				}, nil).Once()
+
+				r = httptest.NewRequest(http.MethodGet, "/api/v1/workflows", http.NoBody)
+			})
+
+			It("lists workflows with default pagination", func() {
+				Expect(w.Code).To(Equal(http.StatusOK))
+
+				var resp map[string][]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(resp["workflows"]).To(HaveLen(5))
+			})
+		})
+
+		When("limit and offset query params are provided", func() {
+			BeforeEach(func() {
+				expectedListOpts := domain.ListOptions{
+					Limit:   2,
+					Offset:  1,
+					OrderBy: "created_at DESC",
+				}
+				workflowRepo.On("List", ctxMatcher, expectedListOpts).Return([]*domain.Workflow{
+					{ID: uuid.New(), Name: "Workflow 2", Status: domain.WorkflowDraft},
+					{ID: uuid.New(), Name: "Workflow 3", Status: domain.WorkflowArchived},
+				}, nil).Once()
+
+				r = httptest.NewRequest(http.MethodGet, "/api/v1/workflows?limit=2&offset=1", http.NoBody)
+			})
+
+			It("lists workflows with custom limit and offset", func() {
+				Expect(w.Code).To(Equal(http.StatusOK))
+
+				var resp map[string][]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(resp["workflows"]).To(HaveLen(2))
+			})
+		})
+	})
+	Describe("GET /api/v1/workflows/{id}", func() {
+		var workflowID string
+		When("workflow exists", func() {
+			BeforeEach(func() {
 				wf := &domain.Workflow{
 					ID:          uuid.New(),
-					Name:        fmt.Sprintf("Workflow %d", i+1),
-					Description: fmt.Sprintf("Description %d", i+1),
+					Name:        "Test Workflow",
+					Description: "A test workflow",
+					Status:      domain.WorkflowActive,
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}
+				workflowID = wf.ID.String()
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(wf, nil).Once()
+				r = httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+workflowID, http.NoBody)
+			})
+
+			It("retrieves a workflow by ID", func() {
+				Expect(w.Code).To(Equal(http.StatusOK))
+
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(resp["id"]).To(Equal(workflowID))
+				Expect(resp["name"]).To(Equal("Test Workflow"))
+			})
+		})
+
+		When("workflow does not exist", func() {
+			BeforeEach(func() {
+				workflowRepo.On("Get", ctxMatcher, mock.AnythingOfType("string")).Return(nil, nil).Once()
+				r = httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+uuid.New().String(), http.NoBody)
+			})
+
+			It("returns 404 for non-existent workflow", func() {
+				Expect(w.Code).To(Equal(http.StatusNotFound))
+
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(resp["code"]).To(Equal("NOT_FOUND"))
+			})
+		})
+	})
+	Describe("PUT /api/v1/workflows/{id}", func() {
+		var (
+			newName    = "Updated Name"
+			workflowID string
+			wf         *domain.Workflow
+		)
+
+		When("workflow exists and is in draft status", func() {
+			BeforeEach(func() {
+				wf = &domain.Workflow{
+					ID:          uuid.New(),
+					Name:        "Original Name",
+					Description: "Original Description",
 					Status:      domain.WorkflowDraft,
 					CreatedAt:   time.Now(),
 					UpdatedAt:   time.Now(),
 				}
-				_ = workflowRepo.Create(context.Background(), wf)
-			}
+				workflowID = wf.ID.String()
+
+				reqBody := map[string]interface{}{
+					"name": newName,
+				}
+				body, _ := json.Marshal(reqBody)
+
+				r = httptest.NewRequest(http.MethodPut, "/api/v1/workflows/"+workflowID, bytes.NewReader(body))
+				r.Header.Set("Content-Type", "application/json")
+
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(wf, nil).Once()
+				workflowRepo.On("Update", ctxMatcher, mock.AnythingOfType("*domain.Workflow")).Return(nil).Once()
+			})
+
+			It("updates the workflow name", func() {
+				Expect(w.Code).To(Equal(http.StatusOK))
+
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(resp["name"]).To(Equal(newName))
+			})
 		})
+		When("workflow is active", func() {
+			BeforeEach(func() {
+				wf = &domain.Workflow{
+					ID:          uuid.New(),
+					Name:        "Original Name",
+					Description: "Original Description",
+					Status:      domain.WorkflowActive,
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}
+				workflowID = wf.ID.String()
+				reqBody := map[string]interface{}{
+					"name": newName,
+				}
+				body, _ := json.Marshal(reqBody)
 
-		It("lists workflows with default pagination", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows", http.NoBody)
-			w := httptest.NewRecorder()
+				r = httptest.NewRequest(http.MethodPut, "/api/v1/workflows/"+workflowID, bytes.NewReader(body))
+				r.Header.Set("Content-Type", "application/json")
 
-			server.ServeHTTP(w, req)
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(wf, nil).Once()
+			})
+			It("returns 409 (conflict)", func() {
+				Expect(w.Code).To(Equal(http.StatusConflict))
 
-			Expect(w.Code).To(Equal(http.StatusOK))
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
 
-			var resp []map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp).To(HaveLen(5))
-		})
-
-		It("lists workflows with custom limit and offset", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows?limit=2&offset=1", http.NoBody)
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
-			Expect(w.Code).To(Equal(http.StatusOK))
-
-			var resp []map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp).To(HaveLen(2))
-		})
-	})
-
-	Describe("GET /api/v1/workflows/{id}", func() {
-		var workflowID string
-
-		BeforeEach(func() {
-			wf := &domain.Workflow{
-				ID:          uuid.New(),
-				Name:        "Test Workflow",
-				Description: "A test workflow",
-				Status:      domain.WorkflowActive,
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-			workflowID = wf.ID.String()
-		})
-
-		It("retrieves a workflow by ID", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+workflowID, http.NoBody)
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
-			Expect(w.Code).To(Equal(http.StatusOK))
-
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["id"]).To(Equal(workflowID))
-			Expect(resp["name"]).To(Equal("Test Workflow"))
-		})
-
-		It("returns 404 for non-existent workflow", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+uuid.New().String(), http.NoBody)
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
-			Expect(w.Code).To(Equal(http.StatusNotFound))
-
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["code"]).To(Equal("NOT_FOUND"))
+				Expect(resp["code"]).To(Equal("CONFLICT"))
+			})
 		})
 	})
-
-	Describe("PUT /api/v1/workflows/{id}", func() {
-		var workflowID string
-
-		BeforeEach(func() {
-			wf := &domain.Workflow{
-				ID:          uuid.New(),
-				Name:        "Original Name",
-				Description: "Original Description",
-				Status:      domain.WorkflowDraft,
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-			workflowID = wf.ID.String()
-		})
-
-		It("updates a workflow", func() {
-			newName := "Updated Name"
-			reqBody := map[string]interface{}{
-				"name": newName,
-			}
-			body, _ := json.Marshal(reqBody)
-
-			req := httptest.NewRequest(http.MethodPut, "/api/v1/workflows/"+workflowID, bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
-			Expect(w.Code).To(Equal(http.StatusOK))
-
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["name"]).To(Equal(newName))
-		})
-
-		It("returns 409 when trying to update active workflow", func() {
-			// Activate the workflow first
-			wf, _ := workflowRepo.Get(context.Background(), workflowID)
-			wf.Status = domain.WorkflowActive
-			wf.Steps = []domain.StepDefinition{{Name: "step1", Image: "alpine"}}
-			_ = workflowRepo.Update(context.Background(), wf)
-
-			reqBody := map[string]interface{}{
-				"name": "New Name",
-			}
-			body, _ := json.Marshal(reqBody)
-
-			req := httptest.NewRequest(http.MethodPut, "/api/v1/workflows/"+workflowID, bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
-			Expect(w.Code).To(Equal(http.StatusConflict))
-
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["code"]).To(Equal("CONFLICT"))
-		})
-	})
-
-	//nolint:dupl // Test structure is similar but tests different operations (activate vs archive)
 	Describe("POST /api/v1/workflows/{id}/activate", func() {
 		var workflowID string
 
 		BeforeEach(func() {
-			wf := &domain.Workflow{
-				ID:          uuid.New(),
-				Name:        "Test Workflow",
-				Description: "Test",
-				Status:      domain.WorkflowDraft,
-				Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-			workflowID = wf.ID.String()
+			workflowID = uuid.New().String()
 		})
+		//nolint:dupl // Similar setup for both active and draft workflows
+		When("workflow is in draft status", func() {
+			BeforeEach(func() {
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(&domain.Workflow{
+					ID:          uuid.MustParse(workflowID),
+					Name:        "Test Workflow",
+					Description: "Test",
+					Status:      domain.WorkflowDraft,
+					Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}, nil).Once()
+				workflowRepo.On("Update", ctxMatcher, mock.AnythingOfType("*domain.Workflow")).Return(nil).Once()
+				r = httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/activate", http.NoBody)
+			})
 
-		It("activates a draft workflow", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/activate", http.NoBody)
-			w := httptest.NewRecorder()
+			It("activates a draft workflow", func() {
+				Expect(w.Code).To(Equal(http.StatusOK))
 
-			server.ServeHTTP(w, req)
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
 
-			Expect(w.Code).To(Equal(http.StatusOK))
+				Expect(resp["status"]).To(Equal("active"))
+			})
+		})
+		When("workflow is already active", func() {
+			BeforeEach(func() {
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(&domain.Workflow{
+					ID:          uuid.MustParse(workflowID),
+					Name:        "Test Workflow",
+					Description: "Test",
+					Status:      domain.WorkflowActive,
+					Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}, nil).Once()
+				r = httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/activate", http.NoBody)
+			})
+			It("returns 409 (conflict)", func() {
+				Expect(w.Code).To(Equal(http.StatusConflict))
 
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
 
-			Expect(resp["status"]).To(Equal("active"))
+				Expect(resp["code"]).To(Equal("CONFLICT"))
+			})
 		})
 	})
-
-	//nolint:dupl // Test structure is similar but tests different operations (activate vs archive)
 	Describe("POST /api/v1/workflows/{id}/archive", func() {
 		var workflowID string
 
 		BeforeEach(func() {
-			wf := &domain.Workflow{
-				ID:          uuid.New(),
-				Name:        "Test Workflow",
-				Description: "Test",
-				Status:      domain.WorkflowActive,
-				Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-			workflowID = wf.ID.String()
+			workflowID = uuid.New().String()
 		})
+		//nolint:dupl // Similar setup for both active and draft workflows
+		When("workflow is active", func() {
+			BeforeEach(func() {
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(&domain.Workflow{
+					ID:          uuid.MustParse(workflowID),
+					Name:        "Test Workflow",
+					Description: "Test",
+					Status:      domain.WorkflowActive,
+					Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}, nil).Once()
+				workflowRepo.On("Update", ctxMatcher, mock.AnythingOfType("*domain.Workflow")).Return(nil).Once()
+				r = httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/archive", http.NoBody)
+			})
+			It("archives an active workflow", func() {
+				Expect(w.Code).To(Equal(http.StatusOK))
 
-		It("archives an active workflow", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/archive", http.NoBody)
-			w := httptest.NewRecorder()
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
 
-			server.ServeHTTP(w, req)
-
-			Expect(w.Code).To(Equal(http.StatusOK))
-
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["status"]).To(Equal("archived"))
+				Expect(resp["status"]).To(Equal("archived"))
+			})
 		})
 	})
-
 	Describe("POST /api/v1/workflows/{id}/executions", func() {
 		var workflowID string
 
 		BeforeEach(func() {
-			wf := &domain.Workflow{
-				ID:          uuid.New(),
-				Name:        "Test Workflow",
-				Description: "Test",
-				Status:      domain.WorkflowActive,
-				Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-			workflowID = wf.ID.String()
+			workflowID = uuid.New().String()
 		})
+		When("workflow id is valid and workflow is active", func() {
+			BeforeEach(func() {
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(&domain.Workflow{
+					ID:          uuid.MustParse(workflowID),
+					Name:        "Test Workflow",
+					Description: "Test",
+					Status:      domain.WorkflowActive,
+					Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}, nil).Once()
+				execRepo.On("Create", ctxMatcher, mock.AnythingOfType("*domain.Execution")).Return(nil).Once()
+				stepExecRepo.On("Create", ctxMatcher, mock.AnythingOfType("*domain.StepExecution")).Return(nil).Once()
+				r = httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/executions", http.NoBody)
+			})
+			It("triggers a new execution", func() {
+				Expect(w.Code).To(Equal(http.StatusCreated))
 
-		It("triggers a new execution", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workflows/"+workflowID+"/executions", http.NoBody)
-			w := httptest.NewRecorder()
+				var resp map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &resp)
+				Expect(err).NotTo(HaveOccurred())
 
-			server.ServeHTTP(w, req)
-
-			Expect(w.Code).To(Equal(http.StatusCreated))
-
-			var resp map[string]interface{}
-			err := json.Unmarshal(w.Body.Bytes(), &resp)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(resp["workflow_id"]).To(Equal(workflowID))
-			Expect(resp["status"]).To(Equal("pending"))
+				Expect(resp["workflowID"]).To(Equal(workflowID))
+				Expect(resp["status"]).To(Equal("pending"))
+			})
 		})
 	})
-
 	Describe("GET /api/v1/workflows/{id}/executions", func() {
 		var workflowID string
 
 		BeforeEach(func() {
-			wf := &domain.Workflow{
-				ID:          uuid.New(),
-				Name:        "Test Workflow",
-				Description: "Test",
-				Status:      domain.WorkflowActive,
-				Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-			workflowID = wf.ID.String()
-
-			// Create some executions
+			workflowID = uuid.New().String()
+			// return some executions
+			var execs []*domain.Execution
 			for i := 0; i < 3; i++ {
 				now := time.Now()
 				exec := &domain.Execution{
 					ID:         uuid.New(),
-					WorkflowID: wf.ID,
+					WorkflowID: uuid.MustParse(workflowID),
 					Status:     domain.ExecutionPending,
 					StartedAt:  &now,
 				}
-				_ = execRepo.Create(context.Background(), exec)
+				execs = append(execs, exec)
 			}
+			execRepo.On(
+				"ListByWorkflow",
+				ctxMatcher,
+				workflowID,
+				mock.AnythingOfType("domain.ListOptions"),
+			).Return(execs, nil).Once()
+			r = httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+workflowID+"/executions", http.NoBody)
 		})
 
 		It("lists executions for a workflow", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/workflows/"+workflowID+"/executions", http.NoBody)
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
 			Expect(w.Code).To(Equal(http.StatusOK))
 
-			var resp []map[string]interface{}
+			var resp map[string][]any
 			err := json.Unmarshal(w.Body.Bytes(), &resp)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(resp).To(HaveLen(3))
+			Expect(resp["executions"]).To(HaveLen(3))
 		})
 	})
-
 	Describe("GET /api/v1/executions/{id}", func() {
 		var executionID string
 		var workflowID uuid.UUID
 
 		BeforeEach(func() {
 			workflowID = uuid.New()
-			wf := &domain.Workflow{
-				ID:          workflowID,
-				Name:        "Test Workflow",
-				Description: "Test",
-				Status:      domain.WorkflowActive,
-				Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
 
 			now := time.Now()
 			exec := &domain.Execution{
@@ -432,7 +477,6 @@ var _ = Describe("HTTP Handlers", func() {
 				Status:     domain.ExecutionRunning,
 				StartedAt:  &now,
 			}
-			_ = execRepo.Create(context.Background(), exec)
 			executionID = exec.ID.String()
 
 			// Create step execution
@@ -443,15 +487,12 @@ var _ = Describe("HTTP Handlers", func() {
 				Status:      domain.StepExecutionRunning,
 				StartedAt:   &now,
 			}
-			_ = stepExecRepo.Create(context.Background(), stepExec)
+			r = httptest.NewRequest(http.MethodGet, "/api/v1/executions/"+executionID, http.NoBody)
+			execRepo.On("Get", ctxMatcher, executionID).Return(exec, nil).Once()
+			stepExecRepo.On("ListByExecution", ctxMatcher, executionID).Return([]*domain.StepExecution{stepExec}, nil).Once()
 		})
 
 		It("retrieves an execution with steps", func() {
-			req := httptest.NewRequest(http.MethodGet, "/api/v1/executions/"+executionID, http.NoBody)
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
 			Expect(w.Code).To(Equal(http.StatusOK))
 
 			var resp map[string]interface{}
@@ -466,23 +507,9 @@ var _ = Describe("HTTP Handlers", func() {
 			Expect(steps).To(HaveLen(1))
 		})
 	})
-
 	Describe("POST /api/v1/executions/{id}/cancel", func() {
-		var executionID string
-
 		BeforeEach(func() {
 			workflowID := uuid.New()
-			wf := &domain.Workflow{
-				ID:          workflowID,
-				Name:        "Test Workflow",
-				Description: "Test",
-				Status:      domain.WorkflowActive,
-				Steps:       []domain.StepDefinition{{Name: "step1", Image: "alpine"}},
-				CreatedAt:   time.Now(),
-				UpdatedAt:   time.Now(),
-			}
-			_ = workflowRepo.Create(context.Background(), wf)
-
 			now := time.Now()
 			exec := &domain.Execution{
 				ID:         uuid.New(),
@@ -490,182 +517,14 @@ var _ = Describe("HTTP Handlers", func() {
 				Status:     domain.ExecutionRunning,
 				StartedAt:  &now,
 			}
-			_ = execRepo.Create(context.Background(), exec)
-			executionID = exec.ID.String()
+			executionID := exec.ID.String()
+			execRepo.On("Get", ctxMatcher, executionID).Return(exec, nil).Once()
+			execRepo.On("UpdateStatus", ctxMatcher, executionID, domain.ExecutionCanceled).Return(nil).Once()
+			r = httptest.NewRequest(http.MethodPost, "/api/v1/executions/"+executionID+"/cancel", http.NoBody)
 		})
 
 		It("cancels a running execution", func() {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/executions/"+executionID+"/cancel", http.NoBody)
-			w := httptest.NewRecorder()
-
-			server.ServeHTTP(w, req)
-
 			Expect(w.Code).To(Equal(http.StatusNoContent))
 		})
 	})
 })
-
-// Mock repositories for testing
-
-type mockWorkflowRepo struct {
-	workflows map[string]*domain.Workflow
-}
-
-func newMockWorkflowRepo() *mockWorkflowRepo {
-	return &mockWorkflowRepo{
-		workflows: make(map[string]*domain.Workflow),
-	}
-}
-
-func (m *mockWorkflowRepo) Create(_ context.Context, w *domain.Workflow) error {
-	m.workflows[w.ID.String()] = w
-	return nil
-}
-
-func (m *mockWorkflowRepo) Get(_ context.Context, id string) (*domain.Workflow, error) {
-	w, ok := m.workflows[id]
-	if !ok {
-		return nil, nil
-	}
-	return w, nil
-}
-
-func (m *mockWorkflowRepo) Update(_ context.Context, w *domain.Workflow) error {
-	m.workflows[w.ID.String()] = w
-	return nil
-}
-
-func (m *mockWorkflowRepo) List(_ context.Context, opts domain.ListOptions) ([]*domain.Workflow, error) {
-	var all []*domain.Workflow
-	for _, w := range m.workflows {
-		all = append(all, w)
-	}
-
-	start := opts.Offset
-	end := opts.Offset + opts.Limit
-	if start > len(all) {
-		return []*domain.Workflow{}, nil
-	}
-	if end > len(all) {
-		end = len(all)
-	}
-
-	return all[start:end], nil
-}
-
-type mockExecutionRepo struct {
-	executions map[string]*domain.Execution
-}
-
-func newMockExecutionRepo() *mockExecutionRepo {
-	return &mockExecutionRepo{
-		executions: make(map[string]*domain.Execution),
-	}
-}
-
-func (m *mockExecutionRepo) Create(_ context.Context, e *domain.Execution) error {
-	m.executions[e.ID.String()] = e
-	return nil
-}
-
-func (m *mockExecutionRepo) Get(_ context.Context, id string) (*domain.Execution, error) {
-	e, ok := m.executions[id]
-	if !ok {
-		return nil, nil
-	}
-	return e, nil
-}
-
-func (m *mockExecutionRepo) UpdateStatus(_ context.Context, id string, status domain.ExecutionStatus) error {
-	if e, ok := m.executions[id]; ok {
-		e.Status = status
-	}
-	return nil
-}
-
-func (m *mockExecutionRepo) ListByWorkflow(
-	_ context.Context,
-	workflowID string,
-	opts domain.ListOptions,
-) ([]*domain.Execution, error) {
-	var filtered []*domain.Execution
-	for _, e := range m.executions {
-		if e.WorkflowID.String() == workflowID {
-			filtered = append(filtered, e)
-		}
-	}
-
-	start := opts.Offset
-	end := opts.Offset + opts.Limit
-	if start > len(filtered) {
-		return []*domain.Execution{}, nil
-	}
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-
-	return filtered[start:end], nil
-}
-
-type mockStepExecutionRepo struct {
-	stepExecutions map[string][]*domain.StepExecution
-}
-
-func newMockStepExecutionRepo() *mockStepExecutionRepo {
-	return &mockStepExecutionRepo{
-		stepExecutions: make(map[string][]*domain.StepExecution),
-	}
-}
-
-func (m *mockStepExecutionRepo) Create(_ context.Context, s *domain.StepExecution) error {
-	execID := s.ExecutionID.String()
-	m.stepExecutions[execID] = append(m.stepExecutions[execID], s)
-	return nil
-}
-
-func (m *mockStepExecutionRepo) Get(_ context.Context, id string) (*domain.StepExecution, error) {
-	for _, steps := range m.stepExecutions {
-		for _, s := range steps {
-			if s.ID.String() == id {
-				return s, nil
-			}
-		}
-	}
-	return nil, nil
-}
-
-func (m *mockStepExecutionRepo) Update(_ context.Context, s *domain.StepExecution) error {
-	execID := s.ExecutionID.String()
-	for i, step := range m.stepExecutions[execID] {
-		if step.ID == s.ID {
-			m.stepExecutions[execID][i] = s
-			return nil
-		}
-	}
-	return nil
-}
-
-func (m *mockStepExecutionRepo) ListByExecution(
-	_ context.Context,
-	executionID string,
-) ([]*domain.StepExecution, error) {
-	return m.stepExecutions[executionID], nil
-}
-
-func (m *mockStepExecutionRepo) UpdateStatus(
-	_ context.Context,
-	id string,
-	status domain.StepExecutionStatus,
-	exitCode *int,
-) error {
-	for _, steps := range m.stepExecutions {
-		for _, s := range steps {
-			if s.ID.String() == id {
-				s.Status = status
-				s.ExitCode = exitCode
-				return nil
-			}
-		}
-	}
-	return nil
-}

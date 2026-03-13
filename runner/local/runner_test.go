@@ -1,10 +1,7 @@
-//go:build integration
-
 package local_test
 
 import (
 	"context"
-	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -16,15 +13,10 @@ import (
 	"github.com/nojyerac/go-lib/log"
 )
 
-func TestLocalRunner(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Local Runner Suite")
-}
-
 var _ = Describe("LocalRunner", func() {
 	var (
 		runner *local.LocalRunner
-		logger *logrus.Logger
+		logger logrus.FieldLogger
 		ctx    context.Context
 	)
 
@@ -87,7 +79,7 @@ var _ = Describe("LocalRunner", func() {
 			It("should timeout long-running commands", func() {
 				Skip("Integration test - requires Docker daemon")
 
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:           "test-timeout",
 					Image:          "alpine:latest",
 					Command:        []string{"sleep"},
@@ -107,7 +99,7 @@ var _ = Describe("LocalRunner", func() {
 			It("should pass them to the container", func() {
 				Skip("Integration test - requires Docker daemon")
 
-				step := domain.StepDefinition{
+				step := &domain.StepDefinition{
 					Name:    "test-env",
 					Image:   "alpine:latest",
 					Command: []string{"sh"},

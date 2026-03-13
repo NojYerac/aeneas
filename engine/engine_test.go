@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nojyerac/go-lib/log"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/sirupsen/logrus"
 
 	"github.com/nojyerac/aeneas/domain"
 	"github.com/nojyerac/aeneas/engine"
@@ -58,8 +58,7 @@ var _ = Describe("Engine", func() {
 		executionRepo.executionsByWorkflow[testWorkflow.ID.String()] = []*domain.Execution{testExecution}
 
 		// Configure engine with fast poll interval for testing
-		logger := logrus.New()
-		logger.SetLevel(logrus.ErrorLevel) // Reduce noise in tests
+		logger := log.NewLogger(log.TestConfig) // Reduce noise in tests
 		eng = engine.New(
 			workflowRepo,
 			executionRepo,

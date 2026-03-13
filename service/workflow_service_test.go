@@ -3,399 +3,387 @@ package service_test
 import (
 	"context"
 	"errors"
-	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/nojyerac/aeneas/domain"
 	"github.com/nojyerac/aeneas/service"
-	"github.com/stretchr/testify/assert"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+
+	mockrepo "github.com/nojyerac/aeneas/mocks/domain"
 )
 
-const (
-	testNewName = "New Name"
-)
+const testNewName = "New Name"
 
-// MockWorkflowRepository is a mock implementation of domain.WorkflowRepository
-type MockWorkflowRepository struct {
-	mock.Mock
-}
-
-func (m *MockWorkflowRepository) Create(ctx context.Context, workflow *domain.Workflow) error {
-	args := m.Called(ctx, workflow)
-	return args.Error(0)
-}
-
-func (m *MockWorkflowRepository) Get(ctx context.Context, id string) (*domain.Workflow, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Workflow), args.Error(1)
-}
-
-func (m *MockWorkflowRepository) List(ctx context.Context, opts domain.ListOptions) ([]*domain.Workflow, error) {
-	args := m.Called(ctx, opts)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.Workflow), args.Error(1)
-}
-
-func (m *MockWorkflowRepository) Update(ctx context.Context, workflow *domain.Workflow) error {
-	args := m.Called(ctx, workflow)
-	return args.Error(0)
-}
-
-func TestWorkflowService_Create(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("successful creation", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		input := service.CreateWorkflowInput{
-			Name:        "Test Workflow",
-			Description: "A test workflow",
-			Steps: []domain.StepDefinition{
-				{Name: "step1", Image: "alpine:latest"},
-			},
-		}
-
-		repo.On("Create", ctx, mock.AnythingOfType("*domain.Workflow")).Return(nil)
-
-		workflow, err := svc.Create(ctx, input)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, workflow)
-		assert.Equal(t, input.Name, workflow.Name)
-		assert.Equal(t, input.Description, workflow.Description)
-		assert.Equal(t, domain.WorkflowDraft, workflow.Status)
-		assert.NotEqual(t, uuid.Nil, workflow.ID)
-		repo.AssertExpectations(t)
+var _ = Describe("WorkflowService", func() {
+	var (
+		repo *mockrepo.MockWorkflowRepository
+		svc  *service.WorkflowService
+		ctx  context.Context
+	)
+	BeforeEach(func() {
+		repo = &mockrepo.MockWorkflowRepository{}
+		svc = service.NewWorkflowService(repo)
+		ctx = context.Background()
 	})
-
-	t.Run("validation error - empty name", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		input := service.CreateWorkflowInput{
-			Name: "",
-		}
-
-		workflow, err := svc.Create(ctx, input)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflow)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
+	AfterEach(func() {
+		repo.AssertExpectations(GinkgoT())
 	})
+	Describe("Create", func() {
+		var (
+			input    service.CreateWorkflowInput
+			workflow *domain.Workflow
+			err      error
+		)
+		JustBeforeEach(func() {
+			workflow, err = svc.Create(ctx, input)
+		})
+		When("input is valid", func() {
+			BeforeEach(func() {
+				input = service.CreateWorkflowInput{
+					Name:        "Test Workflow",
+					Description: "A test workflow",
+					Steps: []domain.StepDefinition{
+						{Name: "step1", Image: "alpine:latest"},
+					},
+				}
 
-	t.Run("repository error", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
+				repo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Workflow")).Return(nil).Once()
+			})
+			It("successful creation", func() {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(workflow).NotTo(BeNil())
+				Expect(workflow.Name).To(Equal(input.Name))
+				Expect(workflow.Description).To(Equal(input.Description))
+				Expect(workflow.Status).To(Equal(domain.WorkflowDraft))
+				Expect(workflow.ID).NotTo(Equal(uuid.Nil))
+			})
+		})
+		When("input is invalid", func() {
+			BeforeEach(func() {
+				input = service.CreateWorkflowInput{
+					Name: "",
+				}
+			})
 
-		input := service.CreateWorkflowInput{
-			Name: "Test Workflow",
-		}
-
-		repo.On("Create", ctx, mock.AnythingOfType("*domain.Workflow")).Return(errors.New("database error"))
-
-		workflow, err := svc.Create(ctx, input)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflow)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeInternal, svcErr.Type)
-		repo.AssertExpectations(t)
+			It("validation error - empty name", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
+		When("repository returns an error", func() {
+			BeforeEach(func() {
+				input = service.CreateWorkflowInput{
+					Name: "Test Workflow",
+				}
+				repo.On("Create", ctxMatcher, mock.AnythingOfType("*domain.Workflow")).Return(errors.New("database error")).Once()
+			})
+			It("repository error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("database error"))
+				Expect(workflow).To(BeNil())
+			})
+		})
 	})
-}
-
-func TestWorkflowService_Get(t *testing.T) {
-	ctx := context.Background()
-	workflowID := uuid.New().String()
-
-	t.Run("successful retrieval", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		expectedWorkflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Test Workflow",
-			Status: domain.WorkflowDraft,
-		}
-
-		repo.On("Get", ctx, workflowID).Return(expectedWorkflow, nil)
-
-		workflow, err := svc.Get(ctx, workflowID)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, workflow)
-		assert.Equal(t, expectedWorkflow.ID, workflow.ID)
-		repo.AssertExpectations(t)
+	Describe("Get", func() {
+		var (
+			workflowID string
+			workflow   *domain.Workflow
+			err        error
+		)
+		JustBeforeEach(func() {
+			workflow, err = svc.Get(ctx, workflowID)
+		})
+		When("workflow exists", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				expectedWorkflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Test Workflow",
+					Status: domain.WorkflowDraft,
+				}
+				repo.On("Get", ctxMatcher, workflowID).Return(expectedWorkflow, nil).Once()
+			})
+			It("successful retrieval", func() {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(workflow).NotTo(BeNil())
+				Expect(workflow.ID.String()).To(Equal(workflowID))
+				Expect(workflow.Name).To(Equal("Test Workflow"))
+				Expect(workflow.Status).To(Equal(domain.WorkflowDraft))
+			})
+		})
+		When("invalid ID format", func() {
+			BeforeEach(func() {
+				workflowID = "invalid-uuid"
+			})
+			It("validation error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
+		//nolint:dupl // Similar test case for not found error
+		When("workflow not found", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				repo.On("Get", ctxMatcher, workflowID).Return(nil, nil).Once()
+			})
+			It("not found error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeNotFound))
+			})
+		})
 	})
+	Describe("Update", func() {
+		var (
+			workflowID string
+			input      service.UpdateWorkflowInput
+			workflow   *domain.Workflow
+			err        error
+		)
+		JustBeforeEach(func() {
+			workflow, err = svc.Update(ctx, workflowID, input)
+		})
+		When("workflow exists and input is valid", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				existingWorkflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Old Name",
+					Status: domain.WorkflowDraft,
+				}
+				newName := testNewName
+				input = service.UpdateWorkflowInput{
+					Name: &newName,
+				}
 
-	t.Run("invalid ID format", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
+				repo.On("Get", ctxMatcher, workflowID).Return(existingWorkflow, nil).Once()
+				repo.On("Update", ctxMatcher, mock.AnythingOfType("*domain.Workflow")).Return(nil).Once()
+			})
+			It("successful update", func() {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(workflow).NotTo(BeNil())
+				Expect(workflow.ID.String()).To(Equal(workflowID))
+				Expect(workflow.Name).To(Equal(testNewName))
+			})
+		})
+		When("input is invalid", func() {
+			BeforeEach(func() {
+				badName := ""
+				input = service.UpdateWorkflowInput{
+					Name: &badName,
+				}
+			})
+			It("validation error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
+		When("workflow does not exist", func() {
+			BeforeEach(func() {
+				tnn := testNewName
+				workflowID = uuid.New().String()
+				input = service.UpdateWorkflowInput{
+					Name: &tnn,
+				}
+				repo.On("Get", ctxMatcher, workflowID).Return(nil, nil).Once()
+			})
+			It("not found error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeNotFound))
+			})
+		})
+		When("cannot modify active workflow", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				existingWorkflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Active Workflow",
+					Status: domain.WorkflowActive,
+				}
+				newName := testNewName
+				input = service.UpdateWorkflowInput{
+					Name: &newName,
+				}
 
-		workflow, err := svc.Get(ctx, "invalid-uuid")
-
-		assert.Error(t, err)
-		assert.Nil(t, workflow)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
+				repo.On("Get", ctxMatcher, workflowID).Return(existingWorkflow, nil).Once()
+			})
+			It("conflict error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeConflict))
+			})
+		})
 	})
-
-	t.Run("not found", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		repo.On("Get", ctx, workflowID).Return(nil, nil)
-
-		workflow, err := svc.Get(ctx, workflowID)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflow)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeNotFound, svcErr.Type)
-		repo.AssertExpectations(t)
+	Describe("Activate", func() {
+		var (
+			workflowID string
+			workflow   *domain.Workflow
+			err        error
+		)
+		JustBeforeEach(func() {
+			workflow, err = svc.Activate(ctx, workflowID)
+		})
+		When("workflow exists and can be activated", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				existingWorkflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Test Workflow",
+					Status: domain.WorkflowDraft,
+					Steps: []domain.StepDefinition{
+						{Name: "step1", Image: "alpine:latest"},
+					},
+				}
+				repo.On("Get", ctxMatcher, workflowID).Return(existingWorkflow, nil).Once()
+				repo.On("Update", ctxMatcher, mock.AnythingOfType("*domain.Workflow")).Return(nil).Once()
+			})
+			It("successful activation", func() {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(workflow).NotTo(BeNil())
+				Expect(workflow.ID).To(Equal(uuid.MustParse(workflowID)))
+				Expect(workflow.Status).To(Equal(domain.WorkflowActive))
+			})
+		})
+		When("workflow cannot be activated due to validation error", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				existingWorkflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Test Workflow",
+					Status: domain.WorkflowDraft,
+					Steps:  []domain.StepDefinition{},
+				}
+				repo.On("Get", ctxMatcher, workflowID).Return(existingWorkflow, nil).Once()
+			})
+			It("validation error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
+		When("workflow cannot be activated due to invalid state transition", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				existingWorkflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Test Workflow",
+					Status: domain.WorkflowArchived,
+					Steps: []domain.StepDefinition{
+						{Name: "step1", Image: "alpine:latest"},
+					},
+				}
+				repo.On("Get", ctxMatcher, workflowID).Return(existingWorkflow, nil).Once()
+			})
+			It("conflict error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeConflict))
+			})
+		})
+		//nolint:dupl // Similar test case for not found error
+		When("workflow does not exist", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				repo.On("Get", ctxMatcher, workflowID).Return(nil, nil).Once()
+			})
+			It("not found error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflow).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeNotFound))
+			})
+		})
 	})
-}
-
-func TestWorkflowService_Update(t *testing.T) {
-	ctx := context.Background()
-	workflowID := uuid.New().String()
-
-	t.Run("successful update", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		existingWorkflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Old Name",
-			Status: domain.WorkflowDraft,
-		}
-
-		newName := testNewName
-		input := service.UpdateWorkflowInput{
-			Name: &newName,
-		}
-
-		repo.On("Get", ctx, workflowID).Return(existingWorkflow, nil)
-		repo.On("Update", ctx, mock.AnythingOfType("*domain.Workflow")).Return(nil)
-
-		workflow, err := svc.Update(ctx, workflowID, input)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, workflow)
-		assert.Equal(t, newName, workflow.Name)
-		repo.AssertExpectations(t)
+	Describe("Archive", func() {
+		var (
+			workflowID string
+			workflow   *domain.Workflow
+			err        error
+		)
+		JustBeforeEach(func() {
+			workflow, err = svc.Archive(ctx, workflowID)
+		})
+		When("workflow exists and can be archived", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				existingWorkflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Test Workflow",
+					Status: domain.WorkflowActive,
+				}
+				repo.On("Get", ctxMatcher, workflowID).Return(existingWorkflow, nil).Once()
+				repo.On("Update", ctxMatcher, mock.AnythingOfType("*domain.Workflow")).Return(nil).Once()
+			})
+			It("successful archiving", func() {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(workflow).NotTo(BeNil())
+				Expect(workflow.ID).To(Equal(uuid.MustParse(workflowID)))
+				Expect(workflow.Status).To(Equal(domain.WorkflowArchived))
+			})
+		})
 	})
+	Describe("List", func() {
+		var (
+			limit  int
+			offset int
 
-	t.Run("cannot modify active workflow", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		existingWorkflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Active Workflow",
-			Status: domain.WorkflowActive,
-		}
-
-		newName := testNewName
-		input := service.UpdateWorkflowInput{
-			Name: &newName,
-		}
-
-		repo.On("Get", ctx, workflowID).Return(existingWorkflow, nil)
-
-		workflow, err := svc.Update(ctx, workflowID, input)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflow)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeConflict, svcErr.Type)
-		repo.AssertExpectations(t)
+			workflows []*domain.Workflow
+			err       error
+		)
+		JustBeforeEach(func() {
+			workflows, err = svc.List(ctx, limit, offset)
+		})
+		When("pagination parameters are valid", func() {
+			BeforeEach(func() {
+				limit = 10
+				offset = 0
+				expectedWorkflows := []*domain.Workflow{
+					{ID: uuid.New(), Name: "Workflow 1", Status: domain.WorkflowDraft},
+					{ID: uuid.New(), Name: "Workflow 2", Status: domain.WorkflowActive},
+				}
+				repo.On("List", ctxMatcher, mock.AnythingOfType("domain.ListOptions")).Return(expectedWorkflows, nil).Once()
+			})
+			It("successful listing", func() {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(workflows).NotTo(BeNil())
+				Expect(workflows).To(HaveLen(2))
+			})
+		})
+		When("limit is invalid", func() {
+			BeforeEach(func() {
+				limit = 150
+				offset = 0
+			})
+			It("validation error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(workflows).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
 	})
-}
-
-func TestWorkflowService_Activate(t *testing.T) {
-	ctx := context.Background()
-	workflowID := uuid.New().String()
-
-	t.Run("successful activation", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		existingWorkflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Test Workflow",
-			Status: domain.WorkflowDraft,
-			Steps: []domain.StepDefinition{
-				{Name: "step1", Image: "alpine:latest"},
-			},
-		}
-
-		repo.On("Get", ctx, workflowID).Return(existingWorkflow, nil)
-		repo.On("Update", ctx, mock.AnythingOfType("*domain.Workflow")).Return(nil)
-
-		workflow, err := svc.Activate(ctx, workflowID)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, workflow)
-		assert.Equal(t, domain.WorkflowActive, workflow.Status)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("cannot activate workflow without steps", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		existingWorkflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Test Workflow",
-			Status: domain.WorkflowDraft,
-			Steps:  []domain.StepDefinition{},
-		}
-
-		repo.On("Get", ctx, workflowID).Return(existingWorkflow, nil)
-
-		workflow, err := svc.Activate(ctx, workflowID)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflow)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("invalid state transition", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		existingWorkflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Test Workflow",
-			Status: domain.WorkflowArchived,
-			Steps: []domain.StepDefinition{
-				{Name: "step1", Image: "alpine:latest"},
-			},
-		}
-
-		repo.On("Get", ctx, workflowID).Return(existingWorkflow, nil)
-
-		workflow, err := svc.Activate(ctx, workflowID)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflow)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeConflict, svcErr.Type)
-		repo.AssertExpectations(t)
-	})
-}
-
-func TestWorkflowService_Archive(t *testing.T) {
-	ctx := context.Background()
-	workflowID := uuid.New().String()
-
-	t.Run("successful archive", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		existingWorkflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Test Workflow",
-			Status: domain.WorkflowActive,
-		}
-
-		repo.On("Get", ctx, workflowID).Return(existingWorkflow, nil)
-		repo.On("Update", ctx, mock.AnythingOfType("*domain.Workflow")).Return(nil)
-
-		workflow, err := svc.Archive(ctx, workflowID)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, workflow)
-		assert.Equal(t, domain.WorkflowArchived, workflow.Status)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("invalid state transition", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		existingWorkflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Test Workflow",
-			Status: domain.WorkflowDraft,
-		}
-
-		repo.On("Get", ctx, workflowID).Return(existingWorkflow, nil)
-
-		workflow, err := svc.Archive(ctx, workflowID)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflow)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeConflict, svcErr.Type)
-		repo.AssertExpectations(t)
-	})
-}
-
-func TestWorkflowService_List(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("successful list", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		expectedWorkflows := []*domain.Workflow{
-			{ID: uuid.New(), Name: "Workflow 1", Status: domain.WorkflowDraft, CreatedAt: time.Now()},
-			{ID: uuid.New(), Name: "Workflow 2", Status: domain.WorkflowActive, CreatedAt: time.Now()},
-		}
-
-		repo.On("List", ctx, mock.AnythingOfType("domain.ListOptions")).Return(expectedWorkflows, nil)
-
-		workflows, err := svc.List(ctx, 10, 0)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, workflows)
-		assert.Len(t, workflows, 2)
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("invalid limit", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		workflows, err := svc.List(ctx, 150, 0)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflows)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
-	})
-
-	t.Run("invalid offset", func(t *testing.T) {
-		repo := new(MockWorkflowRepository)
-		svc := service.NewWorkflowService(repo)
-
-		workflows, err := svc.List(ctx, 10, -1)
-
-		assert.Error(t, err)
-		assert.Nil(t, workflows)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
-	})
-}
+})

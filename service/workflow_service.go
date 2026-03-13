@@ -32,9 +32,9 @@ type CreateWorkflowInput struct {
 
 // UpdateWorkflowInput represents input for updating a workflow
 type UpdateWorkflowInput struct {
-	Name        *string                  `validate:"omitempty,min=1,max=255"`
-	Description *string                  `validate:"omitempty,max=1000"`
-	Steps       *[]domain.StepDefinition `validate:"omitempty,dive"`
+	Name        *string                 `validate:"omitempty,min=1,max=255"`
+	Description *string                 `validate:"omitempty,max=1000"`
+	Steps       []domain.StepDefinition `validate:"omitempty,dive"`
 }
 
 // Create creates a new workflow
@@ -129,8 +129,8 @@ func (s *WorkflowService) Update(ctx context.Context, id string, input UpdateWor
 	if input.Description != nil {
 		workflow.Description = *input.Description
 	}
-	if input.Steps != nil {
-		workflow.Steps = *input.Steps
+	if len(input.Steps) > 0 {
+		workflow.Steps = input.Steps
 	}
 	workflow.UpdatedAt = time.Now()
 

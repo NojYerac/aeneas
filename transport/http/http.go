@@ -55,9 +55,9 @@ type CreateWorkflowRequest struct {
 }
 
 type UpdateWorkflowRequest struct {
-	Name        *string                  `json:"name,omitempty" validate:"omitempty,min=1,max=255"`
-	Description *string                  `json:"description,omitempty" validate:"omitempty,max=1000"`
-	Steps       *[]domain.StepDefinition `json:"steps,omitempty" validate:"omitempty,dive"`
+	Name        *string                 `json:"name,omitempty" validate:"omitempty,min=1,max=255"`
+	Description *string                 `json:"description,omitempty" validate:"omitempty,max=1000"`
+	Steps       []domain.StepDefinition `json:"steps,omitempty" validate:"omitempty,dive"`
 }
 
 type WorkflowResponse struct {
@@ -66,27 +66,27 @@ type WorkflowResponse struct {
 	Description string                  `json:"description"`
 	Steps       []domain.StepDefinition `json:"steps"`
 	Status      string                  `json:"status"`
-	CreatedAt   string                  `json:"created_at"`
-	UpdatedAt   string                  `json:"updated_at"`
+	CreatedAt   string                  `json:"createdAt"`
+	UpdatedAt   string                  `json:"updatedAt"`
 }
 
 type ExecutionResponse struct {
 	ID         string                  `json:"id"`
-	WorkflowID string                  `json:"workflow_id"`
+	WorkflowID string                  `json:"workflowID"`
 	Status     string                  `json:"status"`
-	StartedAt  *string                 `json:"started_at,omitempty"`
-	FinishedAt *string                 `json:"finished_at,omitempty"`
+	StartedAt  *string                 `json:"startedAt,omitempty"`
+	FinishedAt *string                 `json:"finishedAt,omitempty"`
 	Error      string                  `json:"error,omitempty"`
 	Steps      []StepExecutionResponse `json:"steps,omitempty"`
 }
 
 type StepExecutionResponse struct {
 	ID         string  `json:"id"`
-	StepName   string  `json:"step_name"`
+	StepName   string  `json:"stepName"`
 	Status     string  `json:"status"`
-	StartedAt  *string `json:"started_at,omitempty"`
-	FinishedAt *string `json:"finished_at,omitempty"`
-	ExitCode   *int    `json:"exit_code,omitempty"`
+	StartedAt  *string `json:"startedAt,omitempty"`
+	FinishedAt *string `json:"finishedAt,omitempty"`
+	ExitCode   *int    `json:"exitCode,omitempty"`
 	Error      string  `json:"error,omitempty"`
 }
 
@@ -245,7 +245,7 @@ func (r *Routes) ListWorkflows(w http.ResponseWriter, req *http.Request) {
 		response[i] = workflowToResponse(wf)
 	}
 
-	r.writeJSON(w, http.StatusOK, response)
+	r.writeJSON(w, http.StatusOK, map[string][]WorkflowResponse{"workflows": response})
 }
 
 func (r *Routes) GetWorkflow(w http.ResponseWriter, req *http.Request) {
@@ -349,7 +349,7 @@ func (r *Routes) ListExecutions(w http.ResponseWriter, req *http.Request) {
 		response[i] = executionToResponse(exec, nil)
 	}
 
-	r.writeJSON(w, http.StatusOK, response)
+	r.writeJSON(w, http.StatusOK, map[string][]ExecutionResponse{"executions": response})
 }
 
 func (r *Routes) GetExecution(w http.ResponseWriter, req *http.Request) {

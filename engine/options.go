@@ -11,7 +11,7 @@ import (
 // Options configures the execution engine
 type Options struct {
 	PollInterval time.Duration
-	Logger       *logrus.Logger
+	Logger       logrus.FieldLogger
 	Tracer       trace.Tracer
 }
 
@@ -26,7 +26,7 @@ func WithPollInterval(interval time.Duration) Option {
 }
 
 // WithLogger sets the logger for the engine
-func WithLogger(logger *logrus.Logger) Option {
+func WithLogger(logger logrus.FieldLogger) Option {
 	return func(o *Options) {
 		o.Logger = logger
 	}
