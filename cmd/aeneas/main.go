@@ -74,7 +74,7 @@ func main() {
 	)
 	http.RegisterRoutes(hSrv, workflowSvc, executionSvc)
 
-	reg := rpc.RegisterServices(rpc.WithLogger(logger))
+	reg := rpc.RegisterServices(workflowSvc, executionSvc, rpc.WithLogger(logger))
 	gSrv := libgrpc.NewServer(reg)
 
 	srv, err := transport.NewServer(

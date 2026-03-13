@@ -25,7 +25,7 @@ func (_m *MockRunner) EXPECT() *MockRunner_Expecter {
 }
 
 // Execute provides a mock function with given fields: ctx, step
-func (_m *MockRunner) Execute(ctx context.Context, step *domain.StepDefinition) (*runner.Result, error) {
+func (_m *MockRunner) Execute(ctx context.Context, step *domain.StepDefinition) *runner.Result {
 	ret := _m.Called(ctx, step)
 
 	if len(ret) == 0 {
@@ -33,10 +33,6 @@ func (_m *MockRunner) Execute(ctx context.Context, step *domain.StepDefinition) 
 	}
 
 	var r0 *runner.Result
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *domain.StepDefinition) (*runner.Result, error)); ok {
-		return rf(ctx, step)
-	}
 	if rf, ok := ret.Get(0).(func(context.Context, *domain.StepDefinition) *runner.Result); ok {
 		r0 = rf(ctx, step)
 	} else {
@@ -45,13 +41,7 @@ func (_m *MockRunner) Execute(ctx context.Context, step *domain.StepDefinition) 
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, *domain.StepDefinition) error); ok {
-		r1 = rf(ctx, step)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return r0
 }
 
 // MockRunner_Execute_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Execute'
@@ -73,12 +63,12 @@ func (_c *MockRunner_Execute_Call) Run(run func(ctx context.Context, step *domai
 	return _c
 }
 
-func (_c *MockRunner_Execute_Call) Return(_a0 *runner.Result, _a1 error) *MockRunner_Execute_Call {
-	_c.Call.Return(_a0, _a1)
+func (_c *MockRunner_Execute_Call) Return(_a0 *runner.Result) *MockRunner_Execute_Call {
+	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockRunner_Execute_Call) RunAndReturn(run func(context.Context, *domain.StepDefinition) (*runner.Result, error)) *MockRunner_Execute_Call {
+func (_c *MockRunner_Execute_Call) RunAndReturn(run func(context.Context, *domain.StepDefinition) *runner.Result) *MockRunner_Execute_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -136,6 +136,7 @@ paths:
                 properties:
                   workflowId:
                     type: string
+
   /api/v1/workflows/{workflow_id}:
     parameters:
       - name: workflow_id
@@ -190,6 +191,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowResponse'
+
   /api/v1/workflows/{workflow_id}/activate:
     parameters:
       - name: workflow_id
@@ -210,6 +212,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkflowResponse'
+
   /api/v1/workflows/{workflow_id}/archive:
     parameters:
       - name: workflow_id
@@ -316,6 +319,7 @@ paths:
       responses:
         "204":
           description: Execution canceled successfully
+
 components:
   schemas:
     CreateWorkflowRequest:
