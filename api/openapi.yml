@@ -11,6 +11,7 @@ servers:
     description: Local development server
 
 paths:
+  # telemetry routes
   /livez:
     get:
       summary: Liveliness probe endpoint.
@@ -85,32 +86,405 @@ paths:
                     type: string
                   os:
                     type: string
-  /example/{id}:
-    parameters:
-    - name: id
-      in: path
-      required: true
-      schema:
-        type: string
+  # service routes
+  /api/v1/workflows:
     get:
-      summary: Example endpoint.
+      summary: List all workflows.
+      operationId: listWorkflows
       description: |
-        This is an example endpoint to demonstrate how to add custom API routes to the created service.
+        This endpoint retrieves a list of all existing workflows.
       responses:
         "200":
-          description: Example response
+          description: A list of workflows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - workflowId
+                    - name
+                    - description
+                  properties:
+                    workflowId:
+                      type: string
+                    name:
+                      type: string
+                    description:
+                      type: string
+    post:
+      summary: Create a new workflow.
+      operationId: createWorkflow
+      description: |
+        This endpoint creates a new workflow based on the provided definition.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowRequest'
+      responses:
+        "201":
+          description: Workflow created successfully
           content:
             application/json:
               schema:
                 type: object
                 required:
-                - id
-                - name
-                - description
+                  - workflowId
                 properties:
-                  id:
+                  workflowId:
+                    type: string
+  /api/v1/workflows/{workflow_id}:
+    parameters:
+      - name: workflow_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The unique identifier of the workflow.
+    get:
+      summary: Get workflow details.
+      operationId: getWorkflowById
+      description: |
+        This endpoint retrieves the details of a specific workflow by its ID.
+      responses:
+        "200":
+          description: Workflow details
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - workflowId
+                  - name
+                  - description
+                  - steps
+                properties:
+                  workflowId:
                     type: string
                   name:
                     type: string
                   description:
                     type: string
+                  steps:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StepDefinition'
+    put:
+      summary: Update an existing workflow.
+      operationId: updateWorkflow
+      description: |
+        This endpoint updates an existing workflow with new details.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkflowRequest'
+      responses:
+        "200":
+          description: Workflow updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponse'
+  /api/v1/workflows/{workflow_id}/activate:
+    parameters:
+      - name: workflow_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The unique identifier of the workflow.
+    post:
+      summary: Activate a workflow.
+      operationId: activateWorkflow
+      description: |
+        This endpoint activates a specific workflow, making it ready for execution.
+      responses:
+        "200":
+          description: Workflow activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponse'
+  /api/v1/workflows/{workflow_id}/archive:
+    parameters:
+      - name: workflow_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The unique identifier of the workflow.
+    post:
+      summary: Archive a workflow.
+      operationId: archiveWorkflow
+      description: |
+        This endpoint archives a specific workflow, preventing it from being executed.
+      responses:
+        "200":
+          description: Workflow archived successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowResponse'
+
+  /api/v1/workflows/{workflow_id}/executions:
+    parameters:
+      - name: workflow_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: The unique identifier of the workflow.
+    post:
+      summary: Execute a workflow.
+      operationId: executeWorkflow
+      description: |
+        This endpoint triggers the execution of a specific workflow.
+      responses:
+        "201":
+          description: Workflow execution started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionResponse'
+    get:
+      summary: List workflow executions.
+      operationId: listWorkflowExecutions
+      description: |
+        This endpoint retrieves a list of all executions for a specific workflow.
+      responses:
+        "200":
+          description: A list of workflow executions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExecutionResponse'
+
+  /api/v1/executions/{execution_id}:
+    get:
+      summary: Get execution status and logs.
+      operationId: getExecution
+      description: |
+        This endpoint retrieves the status and logs of a specific execution by its ID.
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique identifier of the execution.
+      responses:
+        "200":
+          description: Execution status and logs
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - executionId
+                  - status
+                  - logs
+                properties:
+                  executionId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [pending, running, succeeded, failed]
+                  logs:
+                    type: string
+
+  /api/v1/executions/{execution_id}/cancel:
+    post:
+      summary: Cancel a running execution.
+      operationId: cancelExecution
+      description: |
+        This endpoint cancels a running execution by its ID.
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The unique identifier of the execution.
+      responses:
+        "204":
+          description: Execution canceled successfully
+components:
+  schemas:
+    CreateWorkflowRequest:
+      type: object
+      required:
+      - name
+      - steps
+      properties:
+        name:
+          type: string
+          min: 1
+          max: 255
+          description: The name of the workflow.
+        description:
+          type: string
+          description: A brief description of the workflow.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepDefinition'
+
+    StepDefinition:
+      type: object
+      required:
+      - name
+      - image
+      - command
+      - env
+      properties:
+        name:
+          type: string
+          description: The name of the step.
+        image:
+          type: string
+          description: The container image to use for this step.
+        command:
+          type: array
+          items:
+            type: string
+          description: The command to execute in the container.
+        args:
+          type: array
+          items:
+            type: string
+          description: The arguments to pass to the command.
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables to set in the container.
+        timeoutSeconds:
+          type: integer
+          description: The maximum time in seconds to allow this step to run before timing out.
+
+    UpdateWorkflowRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The name of the workflow.
+        description:
+          type: string
+          description: A brief description of the workflow.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepDefinition'
+
+    WorkflowResponse:
+      type: object
+      required:
+      - id
+      - name
+      - description
+      - steps
+      - status
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier of the workflow.
+        name:
+          type: string
+          description: The name of the workflow.
+        description:
+          type: string
+          description: A brief description of the workflow.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepDefinition'
+        status:
+          type: string
+          description: The current status of the workflow (e.g., active, inactive).
+        createdAt:
+          type: string
+          format: date-time
+          description: The timestamp when the workflow was created.
+        updatedAt:
+          type: string
+          format: date-time
+          description: The timestamp when the workflow was last updated.
+
+    StepExecutionResponse:
+      type: object
+      required:
+      - id
+      - stepName
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier of the execution step.
+        stepName:
+          type: string
+          description: The name of the execution step.
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, skipped]
+          description: The current status of the execution step (e.g., pending, running, succeeded, failed, skipped).
+        startedAt:
+          type: string
+          format: date-time
+          description: The timestamp when the execution step started.
+        finishedAt:
+          type: string
+          format: date-time
+          description: The timestamp when the execution step finished.
+        exitCode:
+          type: integer
+          description: The exit code of the execution step, if available.
+        error:
+          type: string
+          description: An error message if the execution step failed.
+
+    ExecutionResponse:
+      type: object
+      required:
+      - id
+      - workflowID
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier of the execution.
+        workflowID:
+          type: string
+          format: uuid
+          description: The unique identifier of the workflow being executed.
+        status:
+          type: string
+          enum: [pending, running, succeeded, failed, canceled]
+          description: The current status of the execution (e.g., pending, running, succeeded, failed, canceled).
+        startedAt:
+          type: string
+          format: date-time
+          description: The timestamp when the execution started.
+        finishedAt:
+          type: string
+          format: date-time
+          description: The timestamp when the execution finished.
+        error:
+          type: string
+          description: An error message if the execution failed.
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepExecutionResponse'

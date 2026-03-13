@@ -13,3 +13,10 @@ packages:
       resolve-type-alias: False
       issue-845-fix: True
       include-regex: "^(Runner)$"
+  github.com/nojyerac/aeneas/domain:
+    config:
+      dir: ./mocks/domain
+      with-expecter: True
+      resolve-type-alias: False
+      issue-845-fix: True
+      include-regex: "Repository$"

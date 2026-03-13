@@ -8,6 +8,8 @@ import (
 	"sync"
 
 	"github.com/nojyerac/aeneas/config"
+	"github.com/nojyerac/aeneas/db"
+	"github.com/nojyerac/aeneas/service"
 	"github.com/nojyerac/aeneas/transport/http"
 	"github.com/nojyerac/aeneas/transport/rpc"
 	libdb "github.com/nojyerac/go-lib/db"
@@ -49,7 +51,14 @@ func main() { //nolint:unused // main is the entry point for the service.
 		libdb.WithLogger(logger),
 	)
 
-	// TODO: Initialize repository implementations here
+	// repositories
+	workflowRepo := db.NewWorkflowRepository(database, db.WithLogger(logger))
+	executionRepo := db.NewExecutionRepository(database, db.WithLogger(logger))
+	stepExecutionRepo := db.NewStepExecutionRepository(database, db.WithLogger(logger))
+
+	// services
+	workflowSvc := service.NewWorkflowService(workflowRepo)
+	executionSvc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
 
 	// transports
 	hSrv := libhttp.NewServer(
@@ -57,7 +66,7 @@ func main() { //nolint:unused // main is the entry point for the service.
 		libhttp.WithMetricsHandler(metricHandler),
 		libhttp.WithHealthChecker(hc),
 	)
-	http.RegisterRoutes(hSrv)
+	http.RegisterRoutes(hSrv, workflowSvc, executionSvc)
 
 	reg := rpc.RegisterServices(rpc.WithLogger(logger))
 	gSrv := libgrpc.NewServer(reg)

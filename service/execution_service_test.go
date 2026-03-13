@@ -3,421 +3,339 @@ package service_test
 import (
 	"context"
 	"errors"
-	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/nojyerac/aeneas/domain"
 	"github.com/nojyerac/aeneas/service"
-	"github.com/stretchr/testify/assert"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+
+	mockrepo "github.com/nojyerac/aeneas/mocks/domain"
 )
 
-// MockExecutionRepository is a mock implementation of domain.ExecutionRepository
-type MockExecutionRepository struct {
-	mock.Mock
-}
+const invalidID = "invalid-uuid"
 
-func (m *MockExecutionRepository) Create(ctx context.Context, execution *domain.Execution) error {
-	args := m.Called(ctx, execution)
-	return args.Error(0)
-}
+var ctxMatcher = mock.MatchedBy(func(arg any) bool {
+	_, ok := arg.(context.Context)
+	return ok
+})
 
-func (m *MockExecutionRepository) Get(ctx context.Context, id string) (*domain.Execution, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.Execution), args.Error(1)
-}
-
-func (m *MockExecutionRepository) ListByWorkflow(
-	ctx context.Context,
-	workflowID string,
-	opts domain.ListOptions,
-) ([]*domain.Execution, error) {
-	args := m.Called(ctx, workflowID, opts)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.Execution), args.Error(1)
-}
-
-func (m *MockExecutionRepository) UpdateStatus(ctx context.Context, id string, status domain.ExecutionStatus) error {
-	args := m.Called(ctx, id, status)
-	return args.Error(0)
-}
-
-func (m *MockExecutionRepository) Update(ctx context.Context, execution *domain.Execution) error {
-	args := m.Called(ctx, execution)
-	return args.Error(0)
-}
-
-// MockStepExecutionRepository is a mock implementation of domain.StepExecutionRepository
-type MockStepExecutionRepository struct {
-	mock.Mock
-}
-
-func (m *MockStepExecutionRepository) Create(ctx context.Context, stepExecution *domain.StepExecution) error {
-	args := m.Called(ctx, stepExecution)
-	return args.Error(0)
-}
-
-func (m *MockStepExecutionRepository) ListByExecution(
-	ctx context.Context,
-	executionID string,
-) ([]*domain.StepExecution, error) {
-	args := m.Called(ctx, executionID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*domain.StepExecution), args.Error(1)
-}
-
-func (m *MockStepExecutionRepository) UpdateStatus(
-	ctx context.Context,
-	id string,
-	status domain.StepExecutionStatus,
-	exitCode *int,
-) error {
-	args := m.Called(ctx, id, status, exitCode)
-	return args.Error(0)
-}
-
-func TestExecutionService_Trigger(t *testing.T) {
-	ctx := context.Background()
-	workflowID := uuid.New().String()
-
-	t.Run("successful trigger", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		workflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Test Workflow",
-			Status: domain.WorkflowActive,
-			Steps: []domain.StepDefinition{
-				{Name: "step1", Image: "alpine:latest"},
-				{Name: "step2", Image: "ubuntu:latest"},
-			},
-		}
-
-		workflowRepo.On("Get", ctx, workflowID).Return(workflow, nil)
-		executionRepo.On("Create", ctx, mock.AnythingOfType("*domain.Execution")).Return(nil)
-		stepExecutionRepo.On("Create", ctx, mock.AnythingOfType("*domain.StepExecution")).Return(nil).Times(2)
-
-		execution, err := svc.Trigger(ctx, workflowID)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, execution)
-		assert.Equal(t, workflow.ID, execution.WorkflowID)
-		assert.Equal(t, domain.ExecutionPending, execution.Status)
-		assert.NotNil(t, execution.StartedAt)
-		workflowRepo.AssertExpectations(t)
-		executionRepo.AssertExpectations(t)
-		stepExecutionRepo.AssertExpectations(t)
+var _ = Describe("ExecutionService", func() {
+	var (
+		executionRepo *mockrepo.MockExecutionRepository
+		workflowRepo  *mockrepo.MockWorkflowRepository
+		stepRepo      *mockrepo.MockStepExecutionRepository
+		svc           *service.ExecutionService
+		ctx           context.Context
+	)
+	BeforeEach(func() {
+		executionRepo = new(mockrepo.MockExecutionRepository)
+		workflowRepo = new(mockrepo.MockWorkflowRepository)
+		stepRepo = new(mockrepo.MockStepExecutionRepository)
+		svc = service.NewExecutionService(workflowRepo, executionRepo, stepRepo)
+		ctx = context.Background()
 	})
 
-	t.Run("invalid workflow ID format", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		execution, err := svc.Trigger(ctx, "invalid-uuid")
-
-		assert.Error(t, err)
-		assert.Nil(t, execution)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
+	Describe("Trigger", func() {
+		var (
+			workflowID string
+			exe        *domain.Execution
+			err        error
+		)
+		JustBeforeEach(func() {
+			exe, err = svc.Trigger(ctx, workflowID)
+		})
+		When("triggering a valid workflow", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				workflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Test Workflow",
+					Status: domain.WorkflowActive,
+					Steps: []domain.StepDefinition{
+						{Name: "step1", Image: "alpine:latest"},
+						{Name: "step2", Image: "ubuntu:latest"},
+					},
+				}
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(workflow, nil)
+				executionRepo.On("Create", ctxMatcher, mock.AnythingOfType("*domain.Execution")).Return(nil)
+				stepRepo.On("Create", ctxMatcher, mock.AnythingOfType("*domain.StepExecution")).Return(nil).Times(2)
+			})
+			It("should trigger successfully", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(exe).NotTo(BeNil())
+				Expect(exe.WorkflowID.String()).To(Equal(workflowID))
+				Expect(exe.Status).To(Equal(domain.ExecutionPending))
+				Expect(exe.StartedAt).NotTo(BeNil())
+			})
+		})
+		When("workflow ID is invalid", func() {
+			BeforeEach(func() {
+				workflowID = invalidID
+			})
+			It("should return a validation error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
+		When("workflow is not found", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(nil, nil)
+			})
+			It("should return a not found error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeNotFound))
+			})
+		})
+		When("workflow is inactive", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				workflow := &domain.Workflow{
+					ID:     uuid.MustParse(workflowID),
+					Name:   "Test Workflow",
+					Status: domain.WorkflowDraft,
+				}
+				workflowRepo.On("Get", ctxMatcher, workflowID).Return(workflow, nil)
+			})
+			It("should return a conflict error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeConflict))
+			})
+		})
 	})
-
-	t.Run("workflow not found", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		workflowRepo.On("Get", ctx, workflowID).Return(nil, nil)
-
-		execution, err := svc.Trigger(ctx, workflowID)
-
-		assert.Error(t, err)
-		assert.Nil(t, execution)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeNotFound, svcErr.Type)
-		workflowRepo.AssertExpectations(t)
+	Describe("GetWithSteps", func() {
+		var (
+			executionID string
+			execution   *domain.Execution
+			steps       []*domain.StepExecution
+			err         error
+		)
+		JustBeforeEach(func() {
+			execution, steps, err = svc.GetWithSteps(ctx, executionID)
+		})
+		When("retrieving an existing execution", func() {
+			BeforeEach(func() {
+				executionID = uuid.New().String()
+				execution = &domain.Execution{
+					ID:     uuid.MustParse(executionID),
+					Status: domain.ExecutionRunning,
+				}
+				steps = []*domain.StepExecution{
+					{
+						ID:          uuid.New(),
+						ExecutionID: uuid.MustParse(executionID),
+						StepName:    "step1",
+						Status:      domain.StepExecutionSucceeded,
+					},
+					{
+						ID:          uuid.New(),
+						ExecutionID: uuid.MustParse(executionID),
+						StepName:    "step2",
+						Status:      domain.StepExecutionRunning,
+					},
+				}
+				executionRepo.On("Get", ctxMatcher, executionID).Return(execution, nil)
+				stepRepo.On("ListByExecution", ctxMatcher, executionID).Return(steps, nil)
+			})
+			It("should retrieve successfully", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(execution).NotTo(BeNil())
+				Expect(steps).NotTo(BeNil())
+				Expect(execution.ID.String()).To(Equal(executionID))
+				Expect(steps).To(HaveLen(2))
+			})
+		})
+		When("execution ID is invalid", func() {
+			BeforeEach(func() {
+				executionID = invalidID
+			})
+			It("should return a validation error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
+		When("execution is not found", func() {
+			BeforeEach(func() {
+				executionID = uuid.New().String()
+				executionRepo.On("Get", ctxMatcher, executionID).Return(nil, nil)
+			})
+			It("should return a not found error", func() {
+				Expect(err).To(HaveOccurred())
+				Expect(execution).To(BeNil())
+				Expect(steps).To(BeNil())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeNotFound))
+			})
+		})
 	})
-
-	t.Run("cannot execute inactive workflow", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		workflow := &domain.Workflow{
-			ID:     uuid.MustParse(workflowID),
-			Name:   "Test Workflow",
-			Status: domain.WorkflowDraft,
-		}
-
-		workflowRepo.On("Get", ctx, workflowID).Return(workflow, nil)
-
-		execution, err := svc.Trigger(ctx, workflowID)
-
-		assert.Error(t, err)
-		assert.Nil(t, execution)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeConflict, svcErr.Type)
-		workflowRepo.AssertExpectations(t)
+	Describe("ListByWorkflow", func() {
+		var (
+			workflowID string
+			executions []*domain.Execution
+			err        error
+		)
+		JustBeforeEach(func() {
+			executions, err = svc.ListByWorkflow(ctx, workflowID, 10, 0)
+		})
+		When("listing executions for a workflow", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				executions = []*domain.Execution{
+					{ID: uuid.New(), WorkflowID: uuid.MustParse(workflowID), Status: domain.ExecutionSucceeded},
+					{ID: uuid.New(), WorkflowID: uuid.MustParse(workflowID), Status: domain.ExecutionRunning},
+				}
+				executionRepo.On(
+					"ListByWorkflow",
+					ctxMatcher,
+					workflowID,
+					mock.AnythingOfType("domain.ListOptions"),
+				).Return(executions, nil)
+			})
+			It("should list successfully", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(executions).NotTo(BeNil())
+				Expect(executions).To(HaveLen(2))
+				for _, exe := range executions {
+					Expect(exe.WorkflowID.String()).To(Equal(workflowID))
+				}
+			})
+		})
+		When("workflow ID is invalid", func() {
+			BeforeEach(func() {
+				workflowID = invalidID
+			})
+			It("should return a validation error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
+		When("repository returns an error", func() {
+			BeforeEach(func() {
+				workflowID = uuid.New().String()
+				executionRepo.On(
+					"ListByWorkflow",
+					ctxMatcher,
+					workflowID,
+					mock.AnythingOfType("domain.ListOptions"),
+				).Return(nil, errors.New("database error"))
+			})
+			It("should return an internal error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeInternal))
+			})
+		})
 	})
-}
-
-func TestExecutionService_GetWithSteps(t *testing.T) {
-	ctx := context.Background()
-	executionID := uuid.New().String()
-
-	t.Run("successful retrieval", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		now := time.Now()
-		execution := &domain.Execution{
-			ID:        uuid.MustParse(executionID),
-			Status:    domain.ExecutionRunning,
-			StartedAt: &now,
-		}
-
-		steps := []*domain.StepExecution{
-			{ID: uuid.New(), ExecutionID: execution.ID, StepName: "step1", Status: domain.StepExecutionSucceeded},
-			{ID: uuid.New(), ExecutionID: execution.ID, StepName: "step2", Status: domain.StepExecutionRunning},
-		}
-
-		executionRepo.On("Get", ctx, executionID).Return(execution, nil)
-		stepExecutionRepo.On("ListByExecution", ctx, executionID).Return(steps, nil)
-
-		retrievedExecution, retrievedSteps, err := svc.GetWithSteps(ctx, executionID)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, retrievedExecution)
-		assert.NotNil(t, retrievedSteps)
-		assert.Equal(t, execution.ID, retrievedExecution.ID)
-		assert.Len(t, retrievedSteps, 2)
-		executionRepo.AssertExpectations(t)
-		stepExecutionRepo.AssertExpectations(t)
+	Describe("Cancel", func() {
+		var (
+			executionID string
+			err         error
+		)
+		JustBeforeEach(func() {
+			err = svc.Cancel(ctx, executionID)
+		})
+		When("canceling a pending execution", func() {
+			BeforeEach(func() {
+				executionID = uuid.New().String()
+				execution := &domain.Execution{
+					ID:     uuid.MustParse(executionID),
+					Status: domain.ExecutionPending,
+				}
+				executionRepo.On("Get", ctxMatcher, executionID).Return(execution, nil)
+				executionRepo.On("UpdateStatus", ctxMatcher, executionID, domain.ExecutionCanceled).Return(nil)
+			})
+			It("should cancel successfully", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		When("canceling a running execution", func() {
+			BeforeEach(func() {
+				executionID = uuid.New().String()
+				execution := &domain.Execution{
+					ID:     uuid.MustParse(executionID),
+					Status: domain.ExecutionRunning,
+				}
+				executionRepo.On("Get", ctxMatcher, executionID).Return(execution, nil)
+				executionRepo.On("UpdateStatus", ctxMatcher, executionID, domain.ExecutionCanceled).Return(nil)
+			})
+			It("should cancel successfully", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		When("execution ID is invalid", func() {
+			BeforeEach(func() {
+				executionID = invalidID
+			})
+			It("should return a validation error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeValidation))
+			})
+		})
+		When("execution is not found", func() {
+			BeforeEach(func() {
+				executionID = uuid.New().String()
+				executionRepo.On("Get", ctxMatcher, executionID).Return(nil, nil)
+			})
+			It("should return a not found error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeNotFound))
+			})
+		})
+		When("canceling a completed execution", func() {
+			BeforeEach(func() {
+				executionID = uuid.New().String()
+				execution := &domain.Execution{
+					ID:     uuid.MustParse(executionID),
+					Status: domain.ExecutionSucceeded,
+				}
+				executionRepo.On("Get", ctxMatcher, executionID).Return(execution, nil)
+			})
+			It("should return a conflict error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeConflict))
+			})
+		})
+		When("repository returns an error", func() {
+			BeforeEach(func() {
+				executionID = uuid.New().String()
+				execution := &domain.Execution{
+					ID:     uuid.MustParse(executionID),
+					Status: domain.ExecutionRunning,
+				}
+				executionRepo.On("Get", ctxMatcher, executionID).Return(execution, nil)
+				executionRepo.On(
+					"UpdateStatus",
+					ctxMatcher,
+					executionID,
+					domain.ExecutionCanceled,
+				).Return(errors.New("database error"))
+			})
+			It("should return an internal error", func() {
+				Expect(err).To(HaveOccurred())
+				var svcErr *service.ServiceError
+				Expect(errors.As(err, &svcErr)).To(BeTrue())
+				Expect(svcErr.Type).To(Equal(service.ErrorTypeInternal))
+			})
+		})
 	})
-
-	t.Run("invalid execution ID format", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		execution, steps, err := svc.GetWithSteps(ctx, "invalid-uuid")
-
-		assert.Error(t, err)
-		assert.Nil(t, execution)
-		assert.Nil(t, steps)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
-	})
-
-	t.Run("execution not found", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		executionRepo.On("Get", ctx, executionID).Return(nil, nil)
-
-		execution, steps, err := svc.GetWithSteps(ctx, executionID)
-
-		assert.Error(t, err)
-		assert.Nil(t, execution)
-		assert.Nil(t, steps)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeNotFound, svcErr.Type)
-		executionRepo.AssertExpectations(t)
-	})
-}
-
-func TestExecutionService_ListByWorkflow(t *testing.T) {
-	ctx := context.Background()
-	workflowID := uuid.New().String()
-
-	t.Run("successful list", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		now := time.Now()
-		expectedExecutions := []*domain.Execution{
-			{ID: uuid.New(), WorkflowID: uuid.MustParse(workflowID), Status: domain.ExecutionSucceeded, StartedAt: &now},
-			{ID: uuid.New(), WorkflowID: uuid.MustParse(workflowID), Status: domain.ExecutionRunning, StartedAt: &now},
-		}
-
-		executionRepo.On(
-			"ListByWorkflow",
-			ctx,
-			workflowID,
-			mock.AnythingOfType("domain.ListOptions"),
-		).Return(expectedExecutions, nil)
-
-		executions, err := svc.ListByWorkflow(ctx, workflowID, 10, 0)
-
-		assert.NoError(t, err)
-		assert.NotNil(t, executions)
-		assert.Len(t, executions, 2)
-		executionRepo.AssertExpectations(t)
-	})
-
-	t.Run("invalid workflow ID format", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		executions, err := svc.ListByWorkflow(ctx, "invalid-uuid", 10, 0)
-
-		assert.Error(t, err)
-		assert.Nil(t, executions)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
-	})
-
-	t.Run("invalid limit", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		executions, err := svc.ListByWorkflow(ctx, workflowID, 150, 0)
-
-		assert.Error(t, err)
-		assert.Nil(t, executions)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
-	})
-}
-
-func testSuccessfulCancel(t *testing.T, ctx context.Context, executionID string, status domain.ExecutionStatus) {
-	t.Helper()
-	workflowRepo := new(MockWorkflowRepository)
-	executionRepo := new(MockExecutionRepository)
-	stepExecutionRepo := new(MockStepExecutionRepository)
-	svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-	execution := &domain.Execution{
-		ID:     uuid.MustParse(executionID),
-		Status: status,
-	}
-
-	executionRepo.On("Get", ctx, executionID).Return(execution, nil)
-	executionRepo.On("UpdateStatus", ctx, executionID, domain.ExecutionCanceled).Return(nil)
-
-	err := svc.Cancel(ctx, executionID)
-
-	assert.NoError(t, err)
-	executionRepo.AssertExpectations(t)
-}
-
-func TestExecutionService_Cancel(t *testing.T) {
-	ctx := context.Background()
-	executionID := uuid.New().String()
-
-	t.Run("successful cancel from pending", func(t *testing.T) {
-		testSuccessfulCancel(t, ctx, executionID, domain.ExecutionPending)
-	})
-
-	t.Run("successful cancel from running", func(t *testing.T) {
-		testSuccessfulCancel(t, ctx, executionID, domain.ExecutionRunning)
-	})
-
-	t.Run("invalid execution ID format", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		err := svc.Cancel(ctx, "invalid-uuid")
-
-		assert.Error(t, err)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeValidation, svcErr.Type)
-	})
-
-	t.Run("execution not found", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		executionRepo.On("Get", ctx, executionID).Return(nil, nil)
-
-		err := svc.Cancel(ctx, executionID)
-
-		assert.Error(t, err)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeNotFound, svcErr.Type)
-		executionRepo.AssertExpectations(t)
-	})
-
-	t.Run("cannot cancel completed execution", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		execution := &domain.Execution{
-			ID:     uuid.MustParse(executionID),
-			Status: domain.ExecutionSucceeded,
-		}
-
-		executionRepo.On("Get", ctx, executionID).Return(execution, nil)
-
-		err := svc.Cancel(ctx, executionID)
-
-		assert.Error(t, err)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeConflict, svcErr.Type)
-		executionRepo.AssertExpectations(t)
-	})
-
-	t.Run("repository error", func(t *testing.T) {
-		workflowRepo := new(MockWorkflowRepository)
-		executionRepo := new(MockExecutionRepository)
-		stepExecutionRepo := new(MockStepExecutionRepository)
-		svc := service.NewExecutionService(workflowRepo, executionRepo, stepExecutionRepo)
-
-		execution := &domain.Execution{
-			ID:     uuid.MustParse(executionID),
-			Status: domain.ExecutionRunning,
-		}
-
-		executionRepo.On("Get", ctx, executionID).Return(execution, nil)
-		executionRepo.On("UpdateStatus", ctx, executionID, domain.ExecutionCanceled).Return(errors.New("database error"))
-
-		err := svc.Cancel(ctx, executionID)
-
-		assert.Error(t, err)
-		var svcErr *service.ServiceError
-		assert.ErrorAs(t, err, &svcErr)
-		assert.Equal(t, service.ErrorTypeInternal, svcErr.Type)
-		executionRepo.AssertExpectations(t)
-	})
-}
+})

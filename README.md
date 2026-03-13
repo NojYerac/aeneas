@@ -138,7 +138,7 @@ aeneas/
 │   ├── entities.go         # Workflow, Execution, StepExecution
 │   ├── repository.go       # Persistence interfaces
 │   └── status.go           # State machines & transitions
-├── data/db/                # PostgreSQL repository implementations
+├── db/                # PostgreSQL repository implementations
 ├── transport/              # HTTP & gRPC handlers (planned)
 ├── plans/                  # Architecture decision records
 └── Makefile
