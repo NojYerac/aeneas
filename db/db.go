@@ -7,6 +7,9 @@ import (
 	"github.com/nojyerac/go-lib/tracing"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
+
+	_ "github.com/lib/pq"
+	_ "modernc.org/sqlite"
 )
 
 type options struct {
